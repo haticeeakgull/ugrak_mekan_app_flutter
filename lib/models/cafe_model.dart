@@ -11,7 +11,7 @@ class Cafe {
     required this.similarity,
   });
 
-  // JSON'dan Cafe nesnesine dönüştürme (React Native'deki item gibi)
+  // JSON'dan Cafe nesnesine dönüştürme
   factory Cafe.fromJson(Map<String, dynamic> json) {
     return Cafe(
       id: json['id'] ?? '',

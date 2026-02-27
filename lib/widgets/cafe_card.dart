@@ -22,7 +22,7 @@ class CafeCard extends StatelessWidget {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            // Etiketler (React Native'deki View row wrap mantığı)
+
             Wrap(
               spacing: 8,
               children: cafe.vibeTags

@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Bugün nasıl hissediyorsun?',
+                      hintText: 'Nasıl bir mekan arıyorsun?',
                       filled: true,
                       fillColor: Colors.white,
                       border: OutlineInputBorder(

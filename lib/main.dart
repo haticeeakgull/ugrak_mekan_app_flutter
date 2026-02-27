@@ -26,10 +26,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Uğrak Mekan',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.deepOrange, // Senin o meşhur turuncu/sarı teman
-      ),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.deepOrange),
       home: const HomeScreen(),
     );
   }

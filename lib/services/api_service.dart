@@ -10,7 +10,7 @@ class ApiService {
   Future<List<Cafe>> searchCafes(String query) async {
     try {
       // 1. BERT Vektörünü Al (FastAPI)
-      // Emülatör kullandığın için 10.0.2.2 kullanmaya devam!
+      // Emülatör için 10.0.2.2
       final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
       final response = await http.post(
         Uri.parse('http://$host:8000/embed'),
