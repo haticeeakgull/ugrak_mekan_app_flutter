@@ -7,10 +7,14 @@ import '../models/cafe_model.dart';
 class ApiService {
   final _supabase = Supabase.instance.client;
 
-  Future<List<Cafe>> searchCafes(String query) async {
+  // Parametreleri opsiyonel ({String? semt, String? vibe}) olarak ekledik
+  Future<List<Cafe>> searchCafes(
+    String query, {
+    String? semt,
+    String? vibe,
+  }) async {
     try {
       // 1. BERT Vektörünü Al (FastAPI)
-      // Emülatör için 10.0.2.2
       final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
       final response = await http.post(
         Uri.parse('http://$host:8000/embed'),
@@ -22,21 +26,25 @@ class ApiService {
 
       final List<dynamic> embedding = jsonDecode(response.body)['embedding'];
 
-      // 2. Supabase RPC Çağrısı
+      // 2. Supabase RPC Çağrısı (v5)
+      // SQL fonksiyonundaki parametre isimleriyle (p_ilce_adi, p_vibe_etiketi)
+      // birebir aynı anahtarları kullanıyoruz.
       final List<dynamic> data = await _supabase.rpc(
-        'kafe_ara_v4',
+        'kafe_ara_v5',
         params: {
           'search_query': query,
           'query_embedding': embedding,
-          'match_threshold': 0.2,
-          'match_count': 5,
+          'p_ilce_adi': semt, // HomeScreen'den gelen secilenSemt
+          'p_vibe_etiketi': vibe, // HomeScreen'den gelen secilenVibe
+          'match_threshold': 0.1,
+          'match_count': 10, // Sonuç sayısını isteğe bağlı artırabilirsin
         },
       );
 
       // JSON listesini Cafe nesneleri listesine çeviriyoruz
       return data.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
-      print("Hata oluştu: $e");
+      print("ApiService Hatası: $e");
       rethrow;
     }
   }
