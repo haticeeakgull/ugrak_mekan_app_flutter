@@ -1,26 +1,36 @@
 class Cafe {
   final String id;
-  final String name;
-  final List<String> vibeTags;
-  final String district;
+  final String kafeAdi; // Dart içinde kafeAdi olarak kullanmak daha standarttır
+  final List<String> vibeEtiketleri;
+  final String ilceAdi;
+  final String semtAdi; // Tablonda semt_adi da olduğu için ekledik
+  final double latitude; // Harita için kritik
+  final double longitude; // Harita için kritik
   final double similarity;
 
   Cafe({
     required this.id,
-    required this.name,
-    required this.vibeTags,
-    required this.district,
+    required this.kafeAdi,
+    required this.vibeEtiketleri,
+    required this.ilceAdi,
+    required this.semtAdi,
+    required this.latitude,
+    required this.longitude,
     required this.similarity,
   });
 
   // JSON'dan Cafe nesnesine dönüştürme
   factory Cafe.fromJson(Map<String, dynamic> json) {
     return Cafe(
-      id: json['id'] ?? '',
-      name: json['kafe_adi'] ?? 'Bilinmeyen Mekan',
-      district: json['ilce_adi'] ?? 'Semt Belirtilmemiş',
-      vibeTags: List<String>.from(json['vibe_etiketleri'] ?? []),
-      similarity: (json['similarity'] ?? 0).toDouble(),
+      id: json['id']?.toString() ?? '',
+      kafeAdi: json['kafe_adi'] ?? 'Bilinmeyen Mekan',
+      ilceAdi: json['ilce_adi'] ?? 'İlçe Belirtilmemiş',
+      semtAdi: json['semt_adi'] ?? 'Semt Belirtilmemiş',
+      vibeEtiketleri: List<String>.from(json['vibe_etiketleri'] ?? []),
+      // Koordinatları double'a güvenli bir şekilde çeviriyoruz
+      latitude: (json['latitude'] ?? 0.0).toDouble(),
+      longitude: (json['longitude'] ?? 0.0).toDouble(),
+      similarity: (json['similarity'] ?? 0.0).toDouble(),
     );
   }
 }
