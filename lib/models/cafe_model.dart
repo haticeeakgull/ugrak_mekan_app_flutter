@@ -7,7 +7,9 @@ class Cafe {
   final double latitude; // Harita için kritik
   final double longitude; // Harita için kritik
   final double similarity;
-
+  final List<String> fotograflar; // Fotoğraf URL listesi
+  final List<Map<String, dynamic>> yorumlar; // Kullanıcı yorumları
+  final List<Map<String, dynamic>> postlar;
   Cafe({
     required this.id,
     required this.kafeAdi,
@@ -17,6 +19,9 @@ class Cafe {
     required this.latitude,
     required this.longitude,
     required this.similarity,
+    required this.fotograflar,
+    required this.yorumlar,
+    required this.postlar,
   });
 
   // JSON'dan Cafe nesnesine dönüştürme
@@ -31,6 +36,9 @@ class Cafe {
       latitude: (json['latitude'] ?? 0.0).toDouble(),
       longitude: (json['longitude'] ?? 0.0).toDouble(),
       similarity: (json['similarity'] ?? 0.0).toDouble(),
+      fotograflar: List<String>.from(json['fotograflar'] ?? []),
+      yorumlar: List<Map<String, dynamic>>.from(json['yorumlar'] ?? []),
+      postlar: List<Map<String, dynamic>>.from(json['postlar'] ?? []),
     );
   }
 }

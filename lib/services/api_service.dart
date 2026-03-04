@@ -48,4 +48,50 @@ class ApiService {
       rethrow;
     }
   }
+
+  Future<void> addComment(String cafeId, String comment, int rating) async {
+    try {
+      await _supabase.from('cafe_yorumlar').insert({
+        'cafe_id': cafeId,
+        'yorum_metni': comment,
+        'kullanici_adi': 'Misafir Kullanıcı',
+        'puan': rating,
+      });
+      print("Yorum başarıyla eklendi!");
+    } catch (e) {
+      print("Yorum ekleme hatası: $e");
+      // Hatayı yukarı fırlatarak UI tarafında kullanıcıya gösterilmesini sağlayabilirsin
+      throw Exception('Yorum gönderilemedi, lütfen tekrar deneyin.');
+    }
+  }
+
+  Future<void> yorumVePostPaylas({
+    required String cafeId,
+    required String icerik,
+    required bool profilimdePaylas,
+    String? fotoUrl,
+  }) async {
+    // 1. Önce Yorumu Kaydet
+    final yorumData = await _supabase
+        .from('cafe_yorumlar')
+        .insert({
+          'cafe_id': cafeId,
+          'yorum_metni': icerik,
+          'kullanici_adi': 'Misafir Kullanıcı',
+        })
+        .select()
+        .single(); // Eklenen yorumun ID'sini almak için .select().single()
+
+    // 2. Eğer kullanıcı "Profilimde Paylaş" dediyse Post tablosuna da ekle
+    if (profilimdePaylas) {
+      await _supabase.from('cafe_postlar').insert({
+        'cafe_id': cafeId,
+        'yorum_id': yorumData['id'], // Yorumla postu bağlıyoruz
+        'kullanici_adi': 'Misafir Kullanıcı',
+        'baslik': 'Yeni Bir Mekan Önerisi!',
+        'icerik': icerik,
+        'foto_url': fotoUrl,
+      });
+    }
+  }
 }

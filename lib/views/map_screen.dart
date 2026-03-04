@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart';
 import '../models/cafe_model.dart';
 
 class MapScreen extends StatelessWidget {
@@ -62,24 +63,27 @@ class MapScreen extends StatelessWidget {
   void _detayGoster(BuildContext context, Cafe kafe) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              kafe.kafeAdi,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Text("Semt: ${kafe.semtAdi}"),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Tamam"),
-            ),
-          ],
-        ),
-      ),
+      isScrollControlled: true, // Tam ekran kaydırma için şart
+      backgroundColor: Colors.transparent,
+      builder: (context) => CafeDetailSheet(cafe: kafe),
     );
   }
+  // builder: (context) => Container(
+  //   padding: const EdgeInsets.all(20),
+  //   child: Column(
+  //     mainAxisSize: MainAxisSize.min,
+  //     children: [
+  //       Text(
+  //         kafe.kafeAdi,
+  //         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  //       ),
+  //       const SizedBox(height: 10),
+  //       Text("Semt: ${kafe.semtAdi}"),
+  //       ElevatedButton(
+  //         onPressed: () => Navigator.pop(context),
+  //         child: const Text("Tamam"),
+  //       ),
+  //     ],
+  //   ),
+  // ),
 }
