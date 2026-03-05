@@ -124,75 +124,62 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   // Tasarımı iyileştirilmiş yorum listesi
   Widget _buildCommentList(List comments) {
-    if (comments.isEmpty) {
-      return const Center(
-        child: Text("Henüz yorum yapılmamış. İlk yorumu sen yap!"),
-      );
-    }
+    // Buradaki 'comments' artık senin Python ile aktardığın
+    // 'cafe_yorumlar' tablosundan gelen liste olmalı.
+
+    if (comments.isEmpty) return const Center(child: Text("Yorum bulunamadı."));
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16), // Tüm listenin kenar boşluğu
+      padding: const EdgeInsets.all(16),
+      shrinkWrap: true, // Scroll sorununu önler
+      physics: const NeverScrollableScrollPhysics(), // Ana kaydırıcıyı kullanır
       itemCount: comments.length,
       itemBuilder: (context, index) {
         final yorum = comments[index];
-
+        print("Gelen yorum verisi: ${yorum.toString()}");
         return Container(
-          margin: const EdgeInsets.only(bottom: 16), // Kutucuklar arası boşluk
-          padding: const EdgeInsets.all(16), // Kutucuk içi metin boşluğu
+          margin: const EdgeInsets.only(bottom: 15),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(15), // Köşeleri yuvarlat
-            border: Border.all(color: Colors.grey.shade200), // Hafif kenarlık
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 4), // Kutucuğa derinlik verir
+                blurRadius: 5,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Üst Kısım: Profil ve İsim
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.orange.shade100,
+                    radius: 15,
+                    backgroundColor: Colors.orange.shade50,
                     child: const Icon(
                       Icons.person,
+                      size: 18,
                       color: Colors.orange,
-                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Text(
-                    yorum['kullanici'] ?? 'Misafir Kullanıcı',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.star, color: Colors.amber, size: 16),
-                  const Text(
-                    " 5.0",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    yorum['kullanici_adi'] ?? 'Misafir',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Divider(height: 1, thickness: 0.5), // Ayırıcı çizgi
-              ),
-              // Orta Kısım: Yorum Metni
+              const Divider(height: 20),
               Text(
                 yorum['mesaj'] ?? '',
                 style: const TextStyle(
                   fontSize: 14,
+                  height: 1.5,
                   color: Colors.black87,
-                  height: 1.5, // Satır aralığı ferahlığı
                 ),
               ),
             ],
