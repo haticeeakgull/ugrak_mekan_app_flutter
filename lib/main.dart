@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ugrak_mekan_app/views/complete_profile_screen.dart';
+import 'package:ugrak_mekan_app/widgets/auth_wrapper.dart';
 import 'views/home_screen.dart';
 
 void main() async {
@@ -27,7 +29,14 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Uğrak Mekan',
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.deepOrange),
-      home: const HomeScreen(),
+      // Uygulama ilk açıldığında login kontrolü yapan wrapper
+      home: const AuthWrapper(),
+
+      // Sayfalar arası yönlendirme tanımları (Routes)
+      routes: {
+        '/home': (context) => const HomeScreen(),
+        '/complete-profile': (context) => const CompleteProfileScreen(),
+      },
     );
   }
 }

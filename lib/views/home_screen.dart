@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // Çıkış için ekledik
 import '../services/api_service.dart';
-import '../services/supabase_service.dart'; // Yeni ekledik
+import '../services/supabase_service.dart';
 import '../models/cafe_model.dart';
 import '../widgets/cafe_card.dart';
 
@@ -14,10 +15,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ApiService _apiService = ApiService();
-  final SupabaseService _supabaseService = SupabaseService(); // Servis tanımı
+  final SupabaseService _supabaseService = SupabaseService();
+  final SupabaseClient supabase = Supabase.instance.client; // Supabase instance
 
   List<Cafe> _results = [];
   bool _isLoading = false;
+  String? _currentUserEmail;
 
   // --- Filtre Değişkenleri ---
   String? _secilenSemt;
@@ -26,19 +29,59 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _vibeler = [];
 
   @override
+  @override
   void initState() {
     super.initState();
-    _filtreleriYukle(); // Sayfa açıldığında veritabanından listeleri çek
+    _filtreleriYukle();
+    _currentUserEmail = supabase.auth.currentUser?.email;
+
+    // Widget ağacı oluştuktan hemen sonra kontrolü başlat
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkProfile();
+    });
   }
 
-  // Supabase'deki View'lardan verileri çeken fonksiyon
+  // Fonksiyonu initState dışına aldık ki daha okunaklı olsun
+  Future<void> _checkProfile() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      // maybeSingle() hata almanı engeller, veri yoksa null döner
+      final data = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', userId)
+          .maybeSingle();
+
+      // Eğer username sütunu boşsa veya satır hiç yoksa yönlendir
+      if (data == null || data['username'] == null) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/complete-profile');
+        }
+      }
+    } catch (e) {
+      print("Profil kontrol hatası: $e");
+    }
+  }
+
+  // Çıkış Yapma Fonksiyonu
+  Future<void> _handleSignOut() async {
+    try {
+      await supabase.auth.signOut();
+      // AuthWrapper sayesinde otomatik Login ekranına dönecektir.
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Çıkış yapılamadı: $e')));
+    }
+  }
+
   Future<void> _filtreleriYukle() async {
-    print("Semtler yükleniyor...");
     try {
       final semtSonuc = await _supabaseService.fetchSemtler();
       final vibeSonuc = await _supabaseService.fetchVibeEtiketleri();
 
-      // Veriler geldiğinde ekranı tazelemek için mutlaka setState kullanmalıyız
       setState(() {
         _semtler = semtSonuc;
         _vibeler = vibeSonuc;
@@ -55,11 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
 
     setState(() => _isLoading = true);
-    print("State güncellendi, semt sayısı: ${_semtler.length}");
 
     try {
-      // ApiService içindeki searchCafes metoduna filtreleri de gönderiyoruz
-      // Not: ApiService içindeki metodun parametrelerini buna göre güncellemeyi unutma!
       final results = await _apiService.searchCafes(
         _searchController.text,
         semt: _secilenSemt,
@@ -83,19 +123,45 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text(
-          'Uğrak Mekan ☕',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+        title: Column(
+          children: [
+            const Text(
+              'Uğrak Mekan ☕',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            if (_currentUserEmail != null)
+              Text(
+                _currentUserEmail!,
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+          ],
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        // SOL ÜSTE PROFİL İKONU (İleride Profil Sayfasına Gider)
+        leading: IconButton(
+          icon: const Icon(Icons.person_pin, color: Colors.deepOrange),
+          onPressed: () {
+            Navigator.pushNamed(context, '/complete-profile');
+          },
+        ),
+        // SAĞ ÜSTE ÇIKIŞ BUTONU
+        actions: [
+          IconButton(
+            onPressed: _handleSignOut,
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // 1. Arama Kutusu Alanı
+            // Arama Kutusu
             Row(
               children: [
                 Expanded(
@@ -119,10 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepOrange,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 18,
-                      horizontal: 20,
-                    ),
+                    padding: const EdgeInsets.all(18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -133,61 +196,45 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 15),
 
-            // 2. Filtreleme Alanı (Dropdownlar)
+            // Dropdown Filtreleri
             Row(
               children: [
-                // Semt Dropdown
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _secilenSemt,
-                        hint: const Text("Semt Seç"),
-                        isExpanded: true,
-                        items: [
-                          const DropdownMenuItem(
-                            value: null,
-                            child: Text("Tüm Semtler"),
-                          ),
-                          ..._semtler.map(
-                            (s) => DropdownMenuItem(value: s, child: Text(s)),
-                          ),
-                        ],
-                        onChanged: (val) => setState(() => _secilenSemt = val),
-                      ),
+                _buildFilterContainer(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _secilenSemt,
+                      hint: const Text("Semt Seç"),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text("Tüm Semtler"),
+                        ),
+                        ..._semtler.map(
+                          (s) => DropdownMenuItem(value: s, child: Text(s)),
+                        ),
+                      ],
+                      onChanged: (val) => setState(() => _secilenSemt = val),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Vibe Dropdown
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _secilenVibe,
-                        hint: const Text("Tarz Seç"),
-                        isExpanded: true,
-                        items: [
-                          const DropdownMenuItem(
-                            value: null,
-                            child: Text("Tüm Tarzlar"),
-                          ),
-                          ..._vibeler.map(
-                            (v) => DropdownMenuItem(value: v, child: Text(v)),
-                          ),
-                        ],
-                        onChanged: (val) => setState(() => _secilenVibe = val),
-                      ),
+                _buildFilterContainer(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _secilenVibe,
+                      hint: const Text("Tarz Seç"),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text("Tüm Tarzlar"),
+                        ),
+                        ..._vibeler.map(
+                          (v) => DropdownMenuItem(value: v, child: Text(v)),
+                        ),
+                      ],
+                      onChanged: (val) => setState(() => _secilenVibe = val),
                     ),
                   ),
                 ),
@@ -196,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 20),
 
-            // 3. Sonuç Listesi Alanı
+            // Sonuçlar
             Expanded(
               child: _isLoading
                   ? const Center(
@@ -205,32 +252,49 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                   : _results.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.coffee_outlined,
-                            size: 64,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'Henüz sonuç yok. Haydi ara!',
-                            style: TextStyle(color: Colors.grey, fontSize: 16),
-                          ),
-                        ],
-                      ),
-                    )
+                  ? _buildEmptyState()
                   : ListView.builder(
                       itemCount: _results.length,
-                      itemBuilder: (context, index) {
-                        return CafeCard(cafe: _results[index]);
-                      },
+                      itemBuilder: (context, index) =>
+                          CafeCard(cafe: _results[index]),
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Yardımcı Widget: Filtre Kutusu
+  Widget _buildFilterContainer({required Widget child}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5),
+          ],
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  // Yardımcı Widget: Boş Liste Ekranı
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.coffee_outlined, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 10),
+          const Text(
+            'Henüz sonuç yok. Haydi ara!',
+            style: TextStyle(color: Colors.grey, fontSize: 16),
+          ),
+        ],
       ),
     );
   }
