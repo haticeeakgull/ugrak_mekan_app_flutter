@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import "package:ugrak_mekan_app/views/auth_screen.dart";
 import "package:ugrak_mekan_app/views/home_screen.dart";
+import 'package:ugrak_mekan_app/views/main_screen.dart';
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -23,7 +24,7 @@ class AuthWrapper extends StatelessWidget {
 
         // Oturum (session) varsa Ana Sayfaya, yoksa Giriş Ekranına git
         if (session != null) {
-          return const HomeScreen();
+          return const MainScreen();
         } else {
           return const AuthScreen();
         }

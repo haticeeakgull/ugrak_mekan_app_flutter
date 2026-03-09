@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // SAĞ ÜSTE ÇIKIŞ BUTONU
         actions: [
           IconButton(
-            onPressed: _handleSignOut,
+            onPressed: _showLogoutDialog,
             icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
           ),
         ],
@@ -296,6 +296,43 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Çıkış Onay Diyaloğu
+  Future<void> _showLogoutDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // Kullanıcı dışarı tıklayarak kapatamasın
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: const Text('Çıkış Yap'),
+          content: const Text('Çıkış yapmak istediğinizden emin misiniz?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('İptal', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.of(context).pop(), // Diyaloğu kapat
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Çıkış Yap'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Diyaloğu kapat
+                _handleSignOut(); // Asıl çıkış işlemini çağır
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
