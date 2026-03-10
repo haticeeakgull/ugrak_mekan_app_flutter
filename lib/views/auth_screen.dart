@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -11,30 +12,72 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController =
-      TextEditingController(); // Teyit için eklendi
+  final _confirmPasswordController = TextEditingController();
   bool _isLogin = true;
   bool _isLoading = false;
 
   final SupabaseClient supabase = Supabase.instance.client;
 
+  /// Google ile Giriş Fonksiyonu
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. Google Cloud Console'dan aldığın Web Client ID buraya gelecek
+      const webClientId =
+          '1072850470874-6lch2m9rv7nqauq5fgmpjjuli5n1ltbj.apps.googleusercontent.com';
+
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId: webClientId,
+      );
+      final googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return; // Kullanıcı seçim yapmadan pencereyi kapattı
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final accessToken = googleAuth.accessToken;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw 'Google ID Token bulunamadı.';
+      }
+
+      // Supabase'e Google kimlik bilgilerini gönderiyoruz
+      await supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+
+      // Giriş başarılı!
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Google ile giriş başarılı!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// E-posta/Şifre ile Giriş veya Kayıt Fonksiyonu
   Future<void> _authenticate() async {
-    // Kayıt modundaysa şifrelerin aynı olup olmadığını kontrol et
     if (!_isLogin &&
         _passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Şifreler birbiriyle eşleşmiyor!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showError('Şifreler birbiriyle eşleşmiyor!');
       return;
     }
 
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen tüm alanları doldurun!')),
-      );
+      _showError('Lütfen tüm alanları doldurun!');
       return;
     }
 
@@ -51,20 +94,22 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text.trim(),
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Kayıt başarılı! Mailinizi kontrol edin.'),
-            ),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Kayıt başarılı!')));
         }
       }
     } on AuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-      );
+      _showError(e.message);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   @override
@@ -75,62 +120,49 @@ class _AuthScreenState extends State<AuthScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.coffee_rounded, size: 80, color: Colors.orange),
-              const SizedBox(height: 20),
-              Text(
-                _isLogin ? "Giriş Yap" : "Hesap Oluştur",
-                style: const TextStyle(
-                  fontSize: 24,
+              const SizedBox(height: 10),
+              const Text(
+                "Uğrak Mekanlar",
+                style: TextStyle(
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
+                  color: Colors.orange,
                 ),
               ),
               const SizedBox(height: 30),
 
-              // E-posta
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'E-posta',
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+              // E-posta alanı
+              _buildTextField(
+                _emailController,
+                'E-posta',
+                Icons.email_outlined,
               ),
               const SizedBox(height: 16),
 
-              // Şifre
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Şifre',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+              // Şifre alanı
+              _buildTextField(
+                _passwordController,
+                'Şifre',
+                Icons.lock_outline,
+                obscure: true,
               ),
 
-              // Şifre Onay (SADECE KAYIT MODUNDA GÖRÜNÜR)
               if (!_isLogin) ...[
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Şifreyi Onayla',
-                    prefixIcon: const Icon(Icons.lock_reset_rounded),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                _buildTextField(
+                  _confirmPasswordController,
+                  'Şifreyi Onayla',
+                  Icons.lock_reset_rounded,
+                  obscure: true,
                 ),
               ],
 
               const SizedBox(height: 24),
 
+              // Giriş/Kaydol Butonu
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -145,18 +177,67 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Text(
-                          _isLogin ? "Giriş" : "Kaydol",
-                          style: const TextStyle(color: Colors.white),
+                          _isLogin ? "Giriş Yap" : "Hesap Oluştur",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
                         ),
                 ),
               ),
 
+              const SizedBox(height: 16),
+
+              // --- VEYA Bölümü ---
+              const Row(
+                children: [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text("veya"),
+                  ),
+                  Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Google ile Giriş Butonu
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: _isLoading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.grey),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logoyu sarmalayıp boyutunu kısıtlıyoruz
+                      Image.network(
+                        'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png', // Daha güvenilir bir link
+                        height: 20,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                              Icons.account_circle,
+                              size: 20,
+                            ), // Yüklenemezse ikon göster
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        "Google ile Devam Et",
+                        style: TextStyle(color: Colors.black87),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
               TextButton(
-                onPressed: () {
-                  setState(() {
-                    _isLogin = !_isLogin;
-                  });
-                },
+                onPressed: () => setState(() => _isLogin = !_isLogin),
                 child: Text(
                   _isLogin
                       ? "Hesabın yok mu? Kaydol"
@@ -166,6 +247,23 @@ class _AuthScreenState extends State<AuthScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    bool obscure = false,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

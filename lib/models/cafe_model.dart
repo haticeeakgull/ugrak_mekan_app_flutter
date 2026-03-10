@@ -1,6 +1,7 @@
 class Cafe {
   final String id;
   final String kafeAdi; // Dart içinde kafeAdi olarak kullanmak daha standarttır
+  final String? user_id;
   final List<String> vibeEtiketleri;
   final String ilceAdi;
   final String semtAdi; // Tablonda semt_adi da olduğu için ekledik
@@ -13,6 +14,7 @@ class Cafe {
   Cafe({
     required this.id,
     required this.kafeAdi,
+    required this.user_id,
     required this.vibeEtiketleri,
     required this.ilceAdi,
     required this.semtAdi,
@@ -29,6 +31,7 @@ class Cafe {
     return Cafe(
       id: json['id']?.toString() ?? '',
       kafeAdi: json['kafe_adi'] ?? 'Bilinmeyen Mekan',
+      user_id: json['user_id'],
       ilceAdi: json['ilce_adi'] ?? 'İlçe Belirtilmemiş',
       semtAdi: json['semt_adi'] ?? 'Semt Belirtilmemiş',
       vibeEtiketleri: List<String>.from(json['vibe_etiketleri'] ?? []),

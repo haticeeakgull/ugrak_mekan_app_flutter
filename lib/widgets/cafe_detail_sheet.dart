@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ugrak_mekan_app/views/create_post_screen.dart';
 import '../models/cafe_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -25,13 +26,130 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     timeago.setLocaleMessages('tr', timeago.TrMessages());
   }
 
-  // Sayfayı aşağı çekince çalışacak yenileme fonksiyonu
+  // Öneri Postunu Silme Fonksiyonu
+  Future<void> _deletePost(dynamic postId) async {
+    try {
+      await supabase.from('cafe_postlar').delete().eq('id', postId);
+      setState(() {}); // Listeyi yeniler
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Öneri başarıyla silindi.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Silme hatası: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Öneri Silme Onay Diyaloğu
+  void _showPostDeleteDialog(dynamic postId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Öneriyi Sil"),
+        content: const Text(
+          "bu paylaşımı kaldırmak istediğinize emin misiniz?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Vazgeç"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deletePost(postId);
+            },
+            child: const Text("Sil", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Öneri Post Kartı Tasarımı (GÜNCELLENDİ)
+  Widget _buildPostCard(Map<String, dynamic> post) {
+    final currentUserId = supabase.auth.currentUser?.id;
+    final bool isMyPost = post['user_id'] == currentUserId; // Postun sahibi mi?
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              Image.network(
+                post['foto_url'],
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+              // Eğer post benimse silme butonunu göster
+              if (isMyPost)
+                PositionAt(
+                  top: 8,
+                  right: 8,
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white.withOpacity(0.8),
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _showPostDeleteDialog(post['id']),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  post['baslik'] ?? '',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  post['icerik'] ?? '',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- DİĞER FONKSİYONLAR (DEĞİŞMEDİ) ---
+
+  Future<List<Map<String, dynamic>>> _fetchCafePosts() async {
+    final response = await supabase
+        .from('cafe_postlar')
+        .select()
+        .eq('cafe_id', widget.cafe.id)
+        .order('paylasim_tarihi', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   Future<void> _handleRefresh() async {
-    setState(() {}); // FutureBuilder'ı tetikler
+    setState(() {});
     await Future.delayed(const Duration(milliseconds: 500));
   }
 
-  // Yorumları veritabanından taze çekme
   Future<List<Map<String, dynamic>>> _fetchComments() async {
     final response = await supabase
         .from('cafe_yorumlar')
@@ -41,29 +159,21 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     return List<Map<String, dynamic>>.from(response);
   }
 
-  // Yorum Silme
   Future<void> _deleteComment(dynamic commentId) async {
     try {
       await supabase.from('cafe_yorumlar').delete().eq('id', commentId);
       setState(() {});
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Yorum başarıyla silindi.')));
+      ).showSnackBar(const SnackBar(content: Text('Yorum silindi.')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Silme hatası: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print(e);
     }
   }
 
-  // Beğenme/Geri Alma
   Future<void> _toggleLike(dynamic commentId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
-
     try {
       final existingLike = await supabase
           .from('yorum_begenileri')
@@ -71,7 +181,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
           .eq('yorum_id', commentId)
           .eq('kullanici_id', user.id)
           .maybeSingle();
-
       if (existingLike == null) {
         await supabase.from('yorum_begenileri').insert({
           'yorum_id': commentId,
@@ -86,47 +195,32 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       }
       setState(() {});
     } catch (e) {
-      print("Beğeni hatası: $e");
+      print(e);
     }
   }
 
-  // Yorum Gönderme
   Future<void> _sendComment() async {
     final commentText = _commentController.text.trim();
     if (commentText.isEmpty) return;
-
     setState(() => _isSending = true);
-
     try {
       final user = supabase.auth.currentUser;
-      if (user == null) throw "Lütfen önce giriş yapın.";
-
+      if (user == null) throw "Giriş yapın.";
       final profileData = await supabase
           .from('profiles')
           .select('username')
           .eq('id', user.id)
           .single();
-
-      final String gercekKullaniciAdi = profileData['username'] ?? 'Anonim';
-
       await supabase.from('cafe_yorumlar').insert({
         'cafe_id': widget.cafe.id,
         'kullanici_id': user.id,
-        'kullanici_adi': gercekKullaniciAdi,
+        'kullanici_adi': profileData['username'] ?? 'Anonim',
         'yorum_metni': commentText,
       });
-
-      setState(() {
-        _commentController.clear();
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Yorum paylaşıldı!')));
+      _commentController.clear();
+      setState(() {});
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
-      );
+      print(e);
     } finally {
       setState(() => _isSending = false);
     }
@@ -216,10 +310,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                     },
                     body: TabBarView(
                       controller: _tabController,
-                      children: [
-                        _buildCommentList(),
-                        _buildPostList(widget.cafe.postlar),
-                      ],
+                      children: [_buildCommentList(), _buildPostList()],
                     ),
                   ),
                 ),
@@ -236,35 +327,16 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _fetchComments(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        }
         final comments = snapshot.data ?? [];
-        if (comments.isEmpty) {
-          // Liste boşken bile refresh çalışması için ListView dönüyoruz
-          return ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: const [
-              SizedBox(height: 100),
-              Center(child: Text("Henüz yorum yapılmamış.")),
-            ],
-          );
-        }
-
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          // RefreshIndicator ile uyumlu çalışması için AlwaysScrollableScrollPhysics şart
-          physics: const AlwaysScrollableScrollPhysics(),
           itemCount: comments.length,
           itemBuilder: (context, index) {
             final yorum = comments[index];
-            final currentUserId = supabase.auth.currentUser?.id;
-            final bool isMyComment = yorum['kullanici_id'] == currentUserId;
-
-            final int likeCount = (yorum['yorum_begenileri'] as List).isNotEmpty
-                ? yorum['yorum_begenileri'][0]['count'] ?? 0
-                : 0;
-
+            final bool isMyComment =
+                yorum['kullanici_id'] == supabase.auth.currentUser?.id;
             return Container(
               margin: const EdgeInsets.only(bottom: 15),
               padding: const EdgeInsets.all(16),
@@ -279,7 +351,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Yorum kartı içindeki Row kısmını şu şekilde güncelle:
                       Row(
                         children: [
                           CircleAvatar(
@@ -296,18 +367,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             yorum['kullanici_adi'] ?? 'Anonim',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(width: 8), // Biraz boşluk
-                          Text(
-                            // 'created_at' Supabase'den String gelir, onu DateTime'a çevirip timeago'ya veriyoruz
-                            timeago.format(
-                              DateTime.parse(yorum['created_at']),
-                              locale: 'tr',
-                            ),
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 12,
-                            ),
-                          ),
                         ],
                       ),
                       if (isMyComment)
@@ -317,15 +376,12 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             color: Colors.redAccent,
                             size: 20,
                           ),
-                          onPressed: () => _showDeleteDialog(yorum['id']),
+                          onPressed: () => _deleteComment(yorum['id']),
                         ),
                     ],
                   ),
-                  const Divider(height: 20),
-                  Text(
-                    yorum['yorum_metni'] ?? '',
-                    style: const TextStyle(fontSize: 14, height: 1.5),
-                  ),
+                  const Divider(),
+                  Text(yorum['yorum_metni'] ?? ''),
                   const SizedBox(height: 10),
                   GestureDetector(
                     onTap: () => _toggleLike(yorum['id']),
@@ -337,13 +393,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                           color: Colors.redAccent,
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          "$likeCount Beğeni",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                          ),
-                        ),
+                        Text("Beğen"),
                       ],
                     ),
                   ),
@@ -356,28 +406,53 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
-  void _showDeleteDialog(dynamic commentId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Yorumu Sil"),
-        content: const Text(
-          "Bu yorumu kalıcı olarak silmek istediğinize emin misiniz?",
+  Widget _buildPostList() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CreatePostScreen(cafeId: widget.cafe.id),
+              ),
+            ).then((_) => setState(() {})),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_a_photo_outlined, color: Colors.deepOrange),
+                  SizedBox(width: 12),
+                  Text("Önerini Paylaş"),
+                ],
+              ),
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Vazgeç"),
-          ),
-          TextButton(
-            onPressed: () {
-              _deleteComment(commentId);
-              Navigator.pop(context);
+        Expanded(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _fetchCafePosts(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting)
+                return const Center(child: CircularProgressIndicator());
+              final cafePosts = snapshot.data ?? [];
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: cafePosts.length,
+                itemBuilder: (context, index) =>
+                    _buildPostCard(cafePosts[index]),
+              );
             },
-            child: const Text("Sil", style: TextStyle(color: Colors.red)),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -385,19 +460,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     return SizedBox(
       height: 140,
       child: widget.cafe.fotograflar.isEmpty
-          ? Container(
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.image_not_supported_outlined,
-                  color: Colors.grey,
-                  size: 40,
-                ),
-              ),
-            )
+          ? const Center(child: Icon(Icons.image_not_supported_outlined))
           : ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: widget.cafe.fotograflar.length,
@@ -416,19 +479,17 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
-  Widget _buildHeaderHandle() {
-    return Center(
-      child: Container(
-        width: 40,
-        height: 5,
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.grey[300],
-          borderRadius: BorderRadius.circular(10),
-        ),
+  Widget _buildHeaderHandle() => Center(
+    child: Container(
+      width: 40,
+      height: 5,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        borderRadius: BorderRadius.circular(10),
       ),
-    );
-  }
+    ),
+  );
 
   Widget _buildCommentInputArea() {
     return Container(
@@ -448,27 +509,19 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
             child: TextField(
               controller: _commentController,
               decoration: InputDecoration(
-                hintText: "Bu mekan hakkında ne düşünüyorsun?",
+                hintText: "Düşüncen nedir?",
                 filled: true,
                 fillColor: Colors.grey.shade100,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
               ),
             ),
           ),
           const SizedBox(width: 10),
           _isSending
-              ? const SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const CircularProgressIndicator()
               : FloatingActionButton.small(
                   onPressed: _sendComment,
                   backgroundColor: Colors.deepOrange,
@@ -478,9 +531,16 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       ),
     );
   }
+}
 
-  Widget _buildPostList(List posts) =>
-      const Center(child: Text("Henüz bir öneri paylaşılmamış."));
+// Positioned için ufak bir yardımcı (Kodda Positioned kullanılabilir ama Stack içinde doğru çalışması için helper)
+class PositionAt extends StatelessWidget {
+  final double? top, right;
+  final Widget child;
+  const PositionAt({super.key, this.top, this.right, required this.child});
+  @override
+  Widget build(BuildContext context) =>
+      Positioned(top: top, right: right, child: child);
 }
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {

@@ -1,16 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cafe_model.dart';
-import '../views/map_screen.dart'; // Harita ekranını import ediyoruz
+import '../views/map_screen.dart';
 
 class CafeCard extends StatelessWidget {
   final Cafe cafe;
+  final VoidCallback? onDelete; // Silme işleminden sonra listeyi yenilemek için
 
-  const CafeCard({super.key, required this.cafe});
+  const CafeCard({super.key, required this.cafe, this.onDelete});
+
+  // Silme işlemini gerçekleştiren fonksiyon
+  Future<void> _postuSil(BuildContext context) async {
+    try {
+      // Veritabanından (cafe_postlar) silme işlemi
+      await Supabase.instance.client
+          .from('cafe_postlar')
+          .delete()
+          .eq(
+            'id',
+            cafe.id,
+          ); // UUID'yi String olarak kullanıyoruz, parse yapmıyoruz!
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Post başarıyla silindi"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Üst widget'a silme işleminin bittiğini haber ver
+        if (onDelete != null) onDelete!();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Silme hatası: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Sadece postun sahibi silsin istiyorsan bu kontrolü kullanabilirsin
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final bool isOwner = cafe.user_id == currentUserId;
+
     return Card(
-      elevation: 3, // Biraz daha belirgin bir gölge
+      elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
@@ -18,7 +58,7 @@ class CafeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Satır: İsim ve Uyum Oranı
+            // 1. Satır: İsim, Silme Butonu ve Uyum Oranı
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -32,6 +72,44 @@ class CafeCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // // Silme Butonu (Sadece sahibi ise veya test için her zaman görünebilir)
+                // IconButton(
+                //   icon: const Icon(
+                //     Icons.delete_outline,
+                //     color: Colors.redAccent,
+                //   ),
+                //   onPressed: () {
+                //     showDialog(
+                //       context: context,
+                //       builder: (context) => AlertDialog(
+                //         title: const Text("Postu Sil"),
+                //         content: const Text(
+                //           "Bu kafeyi listenizden kaldırmak istediğinize emin misiniz?",
+                //         ),
+                //         actions: [
+                //           TextButton(
+                //             onPressed: () => Navigator.pop(context),
+                //             child: const Text("Vazgeç"),
+                //           ),
+                //           ElevatedButton(
+                //             style: ElevatedButton.styleFrom(
+                //               backgroundColor: Colors.red,
+                //             ),
+                //             onPressed: () {
+                //               Navigator.pop(context);
+                //               _postuSil(context);
+                //             },
+                //             child: const Text(
+                //               "Sil",
+                //               style: TextStyle(color: Colors.white),
+                //             ),
+                //           ),
+                //         ],
+                //       ),
+                //     );
+                //   },
+                // ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -54,7 +132,7 @@ class CafeCard extends StatelessWidget {
 
             const SizedBox(height: 6),
 
-            // 2. Satır: Konum Bilgisi (İlçe / Semt)
+            // 2. Satır: Konum Bilgisi
             Row(
               children: [
                 const Icon(
@@ -63,19 +141,20 @@ class CafeCard extends StatelessWidget {
                   color: Colors.grey,
                 ),
                 const SizedBox(width: 4),
-                // Burayı Expanded içine alıyoruz ki sığmayan metin aşağı kaymasın veya hata vermesin
                 Expanded(
                   child: Text(
                     "${cafe.ilceAdi} / ${cafe.semtAdi}",
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                    overflow: TextOverflow.ellipsis, // Sığmazsa "..." koyar
-                    maxLines: 1, // Tek satırda tutar
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               ],
             ),
 
-            // 3. Satır: Vibe Etiketleri (Modern Chip Görünümü)
+            const SizedBox(height: 10),
+
+            // 3. Satır: Vibe Etiketleri
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -113,7 +192,6 @@ class CafeCard extends StatelessWidget {
               height: 45,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // Harita ekranına sadece bu kafeyi içeren liste ile git
                   Navigator.push(
                     context,
                     MaterialPageRoute(
