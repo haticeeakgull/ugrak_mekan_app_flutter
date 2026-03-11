@@ -7,7 +7,7 @@ import '../models/cafe_model.dart';
 class ApiService {
   final _supabase = Supabase.instance.client;
 
-  // Parametreleri opsiyonel ({String? semt, String? vibe}) olarak ekledik
+  /// BERT tabanlı kafe araması yapar
   Future<List<Cafe>> searchCafes(
     String query, {
     String? semt,
@@ -26,72 +26,82 @@ class ApiService {
 
       final List<dynamic> embedding = jsonDecode(response.body)['embedding'];
 
-      // 2. Supabase RPC Çağrısı (v5)
-      // SQL fonksiyonundaki parametre isimleriyle (p_ilce_adi, p_vibe_etiketi)
-      // birebir aynı anahtarları kullanıyoruz.
+      // 2. Supabase RPC Çağrısı
       final List<dynamic> data = await _supabase.rpc(
         'kafe_ara_v5',
         params: {
           'search_query': query,
           'query_embedding': embedding,
-          'p_ilce_adi': semt, // HomeScreen'den gelen secilenSemt
-          'p_vibe_etiketi': vibe, // HomeScreen'den gelen secilenVibe
+          'p_ilce_adi': semt,
+          'p_vibe_etiketi': vibe,
           'match_threshold': 0.1,
-          'match_count': 10, // Sonuç sayısını isteğe bağlı artırabilirsin
+          'match_count': 10,
         },
       );
 
-      // JSON listesini Cafe nesneleri listesine çeviriyoruz
       return data.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
-      print("ApiService Hatası: $e");
+      print("ApiService Arama Hatası: $e");
       rethrow;
     }
   }
 
+  /// Sadece yorum ekler (kullanici_adi artık gönderilmiyor)
   Future<void> addComment(String cafeId, String comment, int rating) async {
     try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw "Yorum yapmak için giriş yapmalısınız!";
+
       await _supabase.from('cafe_yorumlar').insert({
         'cafe_id': cafeId,
+        'kullanici_id': user.id, // Foreign Key bağlantısı
         'yorum_metni': comment,
-        'kullanici_adi': 'Misafir Kullanıcı',
         'puan': rating,
       });
       print("Yorum başarıyla eklendi!");
     } catch (e) {
       print("Yorum ekleme hatası: $e");
-      // Hatayı yukarı fırlatarak UI tarafında kullanıcıya gösterilmesini sağlayabilirsin
       throw Exception('Yorum gönderilemedi, lütfen tekrar deneyin.');
     }
   }
 
+  /// Hem yorum ekler hem de isteğe bağlı olarak post (öneri) paylaşır
   Future<void> yorumVePostPaylas({
     required String cafeId,
     required String icerik,
     required bool profilimdePaylas,
     String? fotoUrl,
   }) async {
-    // 1. Önce Yorumu Kaydet
-    final yorumData = await _supabase
-        .from('cafe_yorumlar')
-        .insert({
-          'cafe_id': cafeId,
-          'yorum_metni': icerik,
-          'kullanici_adi': 'Misafir Kullanıcı',
-        })
-        .select()
-        .single(); // Eklenen yorumun ID'sini almak için .select().single()
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw "İşlem yapmak için giriş yapmalısınız!";
 
-    // 2. Eğer kullanıcı "Profilimde Paylaş" dediyse Post tablosuna da ekle
-    if (profilimdePaylas) {
-      await _supabase.from('cafe_postlar').insert({
-        'cafe_id': cafeId,
-        'yorum_id': yorumData['id'], // Yorumla postu bağlıyoruz
-        'kullanici_adi': 'Misafir Kullanıcı',
-        'baslik': 'Yeni Bir Mekan Önerisi!',
-        'icerik': icerik,
-        'foto_url': fotoUrl,
-      });
+      // 1. Önce Yorumu Kaydet
+      final yorumData = await _supabase
+          .from('cafe_yorumlar')
+          .insert({
+            'cafe_id': cafeId,
+            'kullanici_id': user.id, // kullanici_adi SİLİNDİ
+            'yorum_metni': icerik,
+          })
+          .select()
+          .single();
+
+      // 2. Eğer kullanıcı "Profilimde Paylaş" dediyse Post tablosuna da ekle
+      if (profilimdePaylas) {
+        await _supabase.from('cafe_postlar').insert({
+          'cafe_id': cafeId,
+          'user_id':
+              user.id, // cafe_postlar tablosundaki sütun adın 'user_id' idi
+          'yorum_id': yorumData['id'],
+          'baslik': 'Yeni Bir Mekan Önerisi!',
+          'icerik': icerik,
+          'foto_url': fotoUrl,
+        });
+      }
+    } catch (e) {
+      print("Paylaşım Hatası: $e");
+      rethrow;
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ugrak_mekan_app/views/create_post_screen.dart';
+import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
 import '../models/cafe_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -26,11 +27,19 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     timeago.setLocaleMessages('tr', timeago.TrMessages());
   }
 
-  // Öneri Postunu Silme Fonksiyonu
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  // --- Veritabanı İşlemleri ---
+
   Future<void> _deletePost(dynamic postId) async {
     try {
       await supabase.from('cafe_postlar').delete().eq('id', postId);
-      setState(() {}); // Listeyi yeniler
+      setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Öneri başarıyla silindi.')),
@@ -48,183 +57,54 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     }
   }
 
-  // Öneri Silme Onay Diyaloğu
-  void _showPostDeleteDialog(dynamic postId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Öneriyi Sil"),
-        content: const Text(
-          "bu paylaşımı kaldırmak istediğinize emin misiniz?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Vazgeç"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deletePost(postId);
-            },
-            child: const Text("Sil", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Öneri Post Kartı Tasarımı (GÜNCELLENDİ)
-  Widget _buildPostCard(Map<String, dynamic> post) {
-    final currentUserId = supabase.auth.currentUser?.id;
-    final bool isMyPost = post['user_id'] == currentUserId; // Postun sahibi mi?
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              Image.network(
-                post['foto_url'],
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-              // Eğer post benimse silme butonunu göster
-              if (isMyPost)
-                PositionAt(
-                  top: 8,
-                  right: 8,
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white.withOpacity(0.8),
-                    child: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => _showPostDeleteDialog(post['id']),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  post['baslik'] ?? '',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  post['icerik'] ?? '',
-                  style: TextStyle(color: Colors.grey.shade700),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- DİĞER FONKSİYONLAR (DEĞİŞMEDİ) ---
-
   Future<List<Map<String, dynamic>>> _fetchCafePosts() async {
+    // Postlar için join: user_id üzerinden profiles tablosuna git
     final response = await supabase
         .from('cafe_postlar')
-        .select()
+        .select('*, profiles:user_id (username)')
         .eq('cafe_id', widget.cafe.id)
         .order('paylasim_tarihi', ascending: false);
+
     return List<Map<String, dynamic>>.from(response);
   }
 
-  Future<void> _handleRefresh() async {
-    setState(() {});
-    await Future.delayed(const Duration(milliseconds: 500));
-  }
-
   Future<List<Map<String, dynamic>>> _fetchComments() async {
+    // YORUMLAR İÇİN DÜZELTME: kullanici_id üzerinden profiles join ekledik
     final response = await supabase
         .from('cafe_yorumlar')
-        .select('*, yorum_begenileri(count)')
+        .select('*, profiles:kullanici_id (username)')
         .eq('cafe_id', widget.cafe.id)
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(response);
   }
 
-  Future<void> _deleteComment(dynamic commentId) async {
-    try {
-      await supabase.from('cafe_yorumlar').delete().eq('id', commentId);
-      setState(() {});
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Yorum silindi.')));
-    } catch (e) {
-      print(e);
-    }
-  }
-
-  Future<void> _toggleLike(dynamic commentId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-    try {
-      final existingLike = await supabase
-          .from('yorum_begenileri')
-          .select()
-          .eq('yorum_id', commentId)
-          .eq('kullanici_id', user.id)
-          .maybeSingle();
-      if (existingLike == null) {
-        await supabase.from('yorum_begenileri').insert({
-          'yorum_id': commentId,
-          'kullanici_id': user.id,
-        });
-      } else {
-        await supabase
-            .from('yorum_begenileri')
-            .delete()
-            .eq('yorum_id', commentId)
-            .eq('kullanici_id', user.id);
-      }
-      setState(() {});
-    } catch (e) {
-      print(e);
-    }
-  }
-
   Future<void> _sendComment() async {
     final commentText = _commentController.text.trim();
     if (commentText.isEmpty) return;
+
     setState(() => _isSending = true);
     try {
       final user = supabase.auth.currentUser;
       if (user == null) throw "Giriş yapın.";
-      final profileData = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('id', user.id)
-          .single();
+
+      // DÜZELTME: Artık kullanici_adi göndermiyoruz, sadece ID yeterli
       await supabase.from('cafe_yorumlar').insert({
         'cafe_id': widget.cafe.id,
         'kullanici_id': user.id,
-        'kullanici_adi': profileData['username'] ?? 'Anonim',
         'yorum_metni': commentText,
       });
+
       _commentController.clear();
-      setState(() {});
+      FocusScope.of(context).unfocus();
+      setState(() {}); // Listeyi yenilemek için
     } catch (e) {
-      print(e);
+      print("Yorum gönderme hatası: $e");
     } finally {
       setState(() => _isSending = false);
     }
   }
+
+  // --- Widget Yapısı ---
 
   @override
   Widget build(BuildContext context) {
@@ -234,92 +114,148 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          ),
-          child: Column(
-            children: [
-              _buildHeaderHandle(),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _handleRefresh,
-                  color: Colors.deepOrange,
-                  child: NestedScrollView(
-                    controller: scrollController,
-                    headerSliverBuilder: (context, innerBoxIsScrolled) {
-                      return [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.cafe.kafeAdi,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          resizeToAvoidBottomInset: true,
+          body: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            ),
+            child: Column(
+              children: [
+                _buildHeaderHandle(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async => setState(() {}),
+                    color: Colors.deepOrange,
+                    child: NestedScrollView(
+                      controller: scrollController,
+                      headerSliverBuilder: (context, innerBoxIsScrolled) {
+                        return [
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.cafe.kafeAdi,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  children: widget.cafe.vibeEtiketleri
-                                      .map(
-                                        (v) => Chip(
-                                          label: Text("#$v"),
-                                          backgroundColor:
-                                              Colors.orange.shade50,
-                                          side: BorderSide.none,
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  "Fotoğraflar",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    children: widget.cafe.vibeEtiketleri
+                                        .map(
+                                          (v) => Chip(
+                                            label: Text("#$v"),
+                                            backgroundColor:
+                                                Colors.orange.shade50,
+                                            side: BorderSide.none,
+                                          ),
+                                        )
+                                        .toList(),
                                   ),
-                                ),
-                                const SizedBox(height: 10),
-                                _buildPhotoGallery(),
-                              ],
+                                  const SizedBox(height: 20),
+                                  const Text(
+                                    "Fotoğraflar",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _buildPhotoGallery(),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _SliverAppBarDelegate(
-                            TabBar(
-                              controller: _tabController,
-                              labelColor: Colors.deepOrange,
-                              unselectedLabelColor: Colors.grey,
-                              indicatorColor: Colors.deepOrange,
-                              tabs: const [
-                                Tab(text: "Yorumlar"),
-                                Tab(text: "Öneriler"),
-                              ],
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _SliverAppBarDelegate(
+                              TabBar(
+                                controller: _tabController,
+                                labelColor: Colors.deepOrange,
+                                unselectedLabelColor: Colors.grey,
+                                indicatorColor: Colors.deepOrange,
+                                tabs: const [
+                                  Tab(text: "Yorumlar"),
+                                  Tab(text: "Öneriler"),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ];
-                    },
-                    body: TabBarView(
-                      controller: _tabController,
-                      children: [_buildCommentList(), _buildPostList()],
+                        ];
+                      },
+                      body: TabBarView(
+                        controller: _tabController,
+                        children: [_buildCommentList(), _buildPostList()],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              _buildCommentInputArea(),
-            ],
+                _buildCommentInputArea(),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPostList() {
+    return CustomScrollView(
+      key: const PageStorageKey('oneriler'),
+      slivers: [
+        SliverToBoxAdapter(
+          child: ListTile(
+            title: const Text(
+              "Önerini Paylaş",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            leading: const Icon(Icons.add_a_photo, color: Colors.deepOrange),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CreatePostScreen(cafeId: widget.cafe.id),
+              ),
+            ).then((_) => setState(() {})),
+          ),
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchCafePosts(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final posts = snapshot.data ?? [];
+            if (posts.isEmpty) {
+              return const SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text("Henüz öneri yok."),
+                  ),
+                ),
+              );
+            }
+            return SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  return _buildPostCard(posts[index], posts, index);
+                }, childCount: posts.length),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -330,129 +266,180 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
         if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
         final comments = snapshot.data ?? [];
+        if (comments.isEmpty)
+          return const Center(child: Text("Henüz yorum yok."));
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: comments.length,
-          itemBuilder: (context, index) {
-            final yorum = comments[index];
-            final bool isMyComment =
-                yorum['kullanici_id'] == supabase.auth.currentUser?.id;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 15),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 15,
-                            backgroundColor: Colors.orange.shade50,
-                            child: const Icon(
-                              Icons.person,
-                              size: 18,
-                              color: Colors.orange,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            yorum['kullanici_adi'] ?? 'Anonim',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      if (isMyComment)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
-                          onPressed: () => _deleteComment(yorum['id']),
-                        ),
-                    ],
-                  ),
-                  const Divider(),
-                  Text(yorum['yorum_metni'] ?? ''),
-                  const SizedBox(height: 10),
-                  GestureDetector(
-                    onTap: () => _toggleLike(yorum['id']),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.favorite,
-                          size: 20,
-                          color: Colors.redAccent,
-                        ),
-                        const SizedBox(width: 5),
-                        Text("Beğen"),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+          itemBuilder: (context, index) => _buildCommentCard(comments[index]),
         );
       },
     );
   }
 
-  Widget _buildPostList() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: InkWell(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CreatePostScreen(cafeId: widget.cafe.id),
+  Widget _buildCommentCard(Map<String, dynamic> yorum) {
+    // DÜZELTME: Artık ismi profiles içinden çekiyoruz
+    final String yazarAdi = yorum['profiles']?['username'] ?? 'Anonim';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                yazarAdi,
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-            ).then((_) => setState(() {})),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              if (yorum['kullanici_id'] == supabase.auth.currentUser?.id)
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 20,
+                    color: Colors.red,
+                  ),
+                  onPressed: () {
+                    // Opsiyonel: Yorum silme logic buraya gelebilir
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(yorum['yorum_metni'] ?? ''),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostCard(
+    Map<String, dynamic> post,
+    List<Map<String, dynamic>> allPosts,
+    int index,
+  ) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                PostDetailScreen(allPosts: allPosts, initialIndex: index),
+          ),
+        );
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        clipBehavior: Clip.antiAlias,
+        elevation: 2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                if (post['foto_url'] != null)
+                  Image.network(
+                    post['foto_url'],
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                if (post['user_id'] == supabase.auth.currentUser?.id)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.white.withOpacity(0.8),
+                      child: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _deletePost(post['id']),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(Icons.add_a_photo_outlined, color: Colors.deepOrange),
-                  SizedBox(width: 12),
-                  Text("Önerini Paylaş"),
+                  Expanded(
+                    child: Text(
+                      post['baslik'] ?? '',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: Colors.grey,
+                  ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
-        Expanded(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _fetchCafePosts(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting)
-                return const Center(child: CircularProgressIndicator());
-              final cafePosts = snapshot.data ?? [];
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: cafePosts.length,
-                itemBuilder: (context, index) =>
-                    _buildPostCard(cafePosts[index]),
-              );
-            },
+      ),
+    );
+  }
+
+  Widget _buildCommentInputArea() {
+    return Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 15,
+        left: 15,
+        right: 15,
+        top: 10,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _commentController,
+              decoration: InputDecoration(
+                hintText: "Düşüncen nedir?",
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 10),
+          _isSending
+              ? const SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : FloatingActionButton.small(
+                  onPressed: _sendComment,
+                  backgroundColor: Colors.deepOrange,
+                  elevation: 0,
+                  child: const Icon(Icons.send, color: Colors.white),
+                ),
+        ],
+      ),
     );
   }
 
@@ -490,57 +477,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       ),
     ),
   );
-
-  Widget _buildCommentInputArea() {
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 15,
-        left: 15,
-        right: 15,
-        top: 10,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _commentController,
-              decoration: InputDecoration(
-                hintText: "Düşüncen nedir?",
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          _isSending
-              ? const CircularProgressIndicator()
-              : FloatingActionButton.small(
-                  onPressed: _sendComment,
-                  backgroundColor: Colors.deepOrange,
-                  child: const Icon(Icons.send, color: Colors.white),
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-// Positioned için ufak bir yardımcı (Kodda Positioned kullanılabilir ama Stack içinde doğru çalışması için helper)
-class PositionAt extends StatelessWidget {
-  final double? top, right;
-  final Widget child;
-  const PositionAt({super.key, this.top, this.right, required this.child});
-  @override
-  Widget build(BuildContext context) =>
-      Positioned(top: top, right: right, child: child);
 }
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
