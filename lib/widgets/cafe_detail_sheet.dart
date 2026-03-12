@@ -57,6 +57,35 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     }
   }
 
+  Future<void> _deleteComment(dynamic commentId) async {
+    try {
+      // 1. Supabase'den sil
+      await supabase
+          .from('cafe_yorumlar')
+          // Buradaki 'id' sütun isminin veritabanında doğru olduğundan emin ol
+          .delete()
+          .eq('id', commentId);
+
+      // 2. UI'ı güncelle
+      setState(() {
+        // FutureBuilder zaten tetiklenecek ama anlık tepki için ideal
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Yorum silindi.')));
+      }
+    } catch (e) {
+      print("Yorum silme hatası: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _fetchCafePosts() async {
     // Postlar için join: user_id üzerinden profiles tablosuna git
     final response = await supabase
@@ -70,12 +99,18 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   Future<List<Map<String, dynamic>>> _fetchComments() async {
     // YORUMLAR İÇİN DÜZELTME: kullanici_id üzerinden profiles join ekledik
-    final response = await supabase
-        .from('cafe_yorumlar')
-        .select('*, profiles:kullanici_id (username)')
-        .eq('cafe_id', widget.cafe.id)
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await supabase
+          .from('cafe_yorumlar')
+          .select('*, profiles!cafe_yorumlar_kullanici_id_fkey (username)')
+          .eq('cafe_id', widget.cafe.id)
+          .order('created_at', ascending: false);
+      print("Gelen Yorumlar: $response"); // Verinin yapısını konsolda gör
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("Yorum çekme hatası: $e");
+      return [];
+    }
   }
 
   Future<void> _sendComment() async {
@@ -278,7 +313,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   }
 
   Widget _buildCommentCard(Map<String, dynamic> yorum) {
-    // DÜZELTME: Artık ismi profiles içinden çekiyoruz
     final String yazarAdi = yorum['profiles']?['username'] ?? 'Anonim';
 
     return Container(
@@ -307,7 +341,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                     color: Colors.red,
                   ),
                   onPressed: () {
-                    // Opsiyonel: Yorum silme logic buraya gelebilir
+                    _deleteComment(yorum['id']);
                   },
                 ),
             ],
@@ -443,26 +477,73 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
+  // --- Mevcut _buildPhotoGallery widget'ını bu şekilde güncelle ---
   Widget _buildPhotoGallery() {
-    return SizedBox(
-      height: 140,
-      child: widget.cafe.fotograflar.isEmpty
-          ? const Center(child: Icon(Icons.image_not_supported_outlined))
-          : ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: widget.cafe.fotograflar.length,
-              itemBuilder: (context, index) => Container(
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future:
+          _fetchCafePosts(), // Zaten yukarıda yazdığın fonksiyonu kullanıyoruz
+      builder: (context, snapshot) {
+        // Sabit fotoğraflar (Cafe modelinden gelenler)
+        List<String> allImages = List.from(widget.cafe.fotograflar);
+
+        // Kullanıcı postlarından gelen fotoğrafları ekle
+        if (snapshot.hasData) {
+          final postImages = snapshot.data!
+              .where(
+                (post) => post['foto_url'] != null,
+              ) // Fotoğrafı olanları seç
+              .map((post) => post['foto_url'] as String)
+              .toList();
+          allImages.addAll(postImages);
+        }
+
+        if (allImages.isEmpty) {
+          return const SizedBox(
+            height: 140,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                  Text(
+                    "Henüz fotoğraf yok",
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 140,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: allImages.length,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemBuilder: (context, index) {
+              return Container(
                 width: 220,
                 margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                   image: DecorationImage(
-                    image: NetworkImage(widget.cafe.fotograflar[index]),
+                    image: NetworkImage(allImages[index]),
                     fit: BoxFit.cover,
                   ),
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 

@@ -16,166 +16,516 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
-  late PageController _pageController;
+  late PageController _verticalController;
   final supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: widget.initialIndex);
+    _verticalController = PageController(initialPage: widget.initialIndex);
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _verticalController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          "Öneriler",
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
+      backgroundColor: Colors.black,
       body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical, // Dikey kaydırma (Reels tarzı)
+        controller: _verticalController,
+        scrollDirection: Axis.vertical,
         itemCount: widget.allPosts.length,
         itemBuilder: (context, index) {
           final post = widget.allPosts[index];
+          return _HorizontalPostContainer(
+            key: ValueKey(
+              post['id'],
+            ), // ÖNEMLİ: Durumu korumak için ID bazlı key
+            post: post,
+            supabase: supabase,
+            onDelete: () => setState(() {
+              widget.allPosts.removeAt(index);
+            }),
+          );
+        },
+      ),
+    );
+  }
+}
 
-          // --- NORMALİZE EDİLMİŞ VERİ OKUMA ---
-          // 'profiles' tablosundan gelen iç içe geçmiş (nested) veriyi okuyoruz
-          final String kullaniciAdi = post['profiles'] != null
-              ? (post['profiles']['username'] ?? 'Bilinmeyen Kullanıcı')
-              : 'Anonim';
+class _HorizontalPostContainer extends StatefulWidget {
+  final Map<String, dynamic> post;
+  final SupabaseClient supabase;
+  final VoidCallback onDelete;
 
-          final String icerikMetni = post['icerik'] ?? 'İçerik belirtilmemiş.';
-          final String baslik = post['baslik'] ?? 'Başlıksız';
-          final String fotoUrl = post['foto_url'] ?? '';
+  const _HorizontalPostContainer({
+    super.key,
+    required this.post,
+    required this.supabase,
+    required this.onDelete,
+  });
 
-          return Container(
-            color: Colors.white,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  State<_HorizontalPostContainer> createState() =>
+      _HorizontalPostContainerState();
+}
+
+class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
+  late PageController _horizontalController;
+
+  // Beğeni durumları
+  bool isLiked = false;
+  late int likeCount;
+  bool isSyncing = false; // Çakışmaları önlemek için
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalController = PageController();
+    likeCount = widget.post['begeni_sayisi'] ?? 0;
+    _checkInitialLikeStatus(); // Sayfa açıldığında veritabanına sor
+  }
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
+  // Veritabanından mevcut beğeni durumunu kontrol etme
+  Future<void> _checkInitialLikeStatus() async {
+    final userId = widget.supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final response = await widget.supabase
+          .from('post_likes')
+          .select()
+          .eq('post_id', widget.post['id'])
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          isLiked = response != null;
+        });
+      }
+    } catch (e) {
+      debugPrint("Beğeni durumu kontrol hatası: $e");
+    }
+  }
+
+  // Geliştirilmiş Beğeni Fonksiyonu
+  Future<void> _handleLike() async {
+    // Eğer halihazırda bir işlem sürüyorsa yeni tıklamayı reddet
+    if (isSyncing) return;
+
+    final userId = widget.supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    // İşlemi kilitle
+    setState(() => isSyncing = true);
+
+    // Mevcut durumu yedekle (Hata olursa geri dönmek için)
+    final bool originalStatus = isLiked;
+    final int originalCount = likeCount;
+
+    // 1. Arayüzü anında güncelle (Optimistic Update)
+    setState(() {
+      isLiked = !isLiked;
+      likeCount = isLiked ? likeCount + 1 : likeCount - 1;
+    });
+
+    try {
+      if (originalStatus) {
+        // Zaten beğenilmişti -> SİL
+        await widget.supabase
+            .from('post_likes')
+            .delete()
+            .eq('post_id', widget.post['id'])
+            .eq('user_id', userId);
+      } else {
+        // Beğenilmemişti -> EKLE (Upsert kullanarak çakışmayı önle)
+        await widget.supabase.from('post_likes').upsert(
+          {'post_id': widget.post['id'], 'user_id': userId},
+          onConflict: 'user_id, post_id',
+        ); // Çakışma olursa görmezden gel/güncelle
+      }
+
+      // 2. Ana tablodaki sayacı güncelle
+      await widget.supabase
+          .from('posts')
+          .update({'begeni_sayisi': likeCount})
+          .eq('id', widget.post['id']);
+    } catch (e) {
+      // Hata durumunda (İnternet kopması vs.) arayüzü eski haline çek
+      if (mounted) {
+        setState(() {
+          isLiked = originalStatus;
+          likeCount = originalCount;
+        });
+
+        // Eğer hata "zaten var" hatasıysa kullanıcıya hissettirme, durumu düzelt
+        if (e.toString().contains("23505")) {
+          _checkInitialLikeStatus(); // Veritabanıyla durumu eşitle
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("İşlem gerçekleştirilemedi.")),
+          );
+        }
+      }
+      debugPrint("Beğeni Hatası Detay: $e");
+    } finally {
+      if (mounted) {
+        setState(() => isSyncing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, dynamic> ratings = widget.post['degerlendirme'] ?? {};
+    final List<dynamic> vibeler = ratings['secilen_vibeler'] ?? [];
+    final String kullaniciAdi =
+        widget.post['profiles']?['username'] ?? 'Anonim';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 45, 12, 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          color: Colors.white,
+          child: Stack(
+            children: [
+              PageView(
+                controller: _horizontalController,
+                scrollDirection: Axis.horizontal,
                 children: [
-                  // 1. Kullanıcı Bilgisi (Profil ismi artık profiles tablosundan geliyor)
-                  Padding(
-                    padding: const EdgeInsets.all(15.0),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: Colors.deepOrange.shade50,
-                          child: Text(
-                            kullaniciAdi.isNotEmpty
-                                ? kullaniciAdi[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.deepOrange,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          kullaniciAdi,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildMainPage(context, kullaniciAdi),
+                  _buildDetailsPage(context, ratings, vibeler, kullaniciAdi),
+                ],
+              ),
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: _buildBottomBar(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                  // 2. Görsel
-                  if (fotoUrl.isNotEmpty)
-                    Image.network(
-                      fotoUrl,
-                      width: double.infinity,
-                      height: MediaQuery.of(context).size.height * 0.5,
-                      fit: BoxFit.cover,
-                      // Hata durumunda boş kalmasın diye bir placeholder
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 200,
-                        color: Colors.grey.shade200,
-                        child: const Center(
-                          child: Icon(Icons.broken_image, color: Colors.grey),
-                        ),
+  Widget _buildMainPage(BuildContext context, String kullaniciAdi) {
+    return GestureDetector(
+      onDoubleTap: _handleLike, // Çift tıklama her zaman beğeniye gider
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (widget.post['foto_url'] != null)
+            Image.network(widget.post['foto_url'], fit: BoxFit.cover),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.2),
+                  Colors.transparent,
+                  Colors.black.withOpacity(0.8),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.post['baslik'] ?? 'Başlıksız',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Row(
+                  children: [
+                    Icon(Icons.swipe_left, color: Colors.white70, size: 20),
+                    SizedBox(width: 8),
+                    Text("Detaylar", style: TextStyle(color: Colors.white70)),
+                  ],
+                ),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsPage(
+    BuildContext context,
+    Map<String, dynamic> ratings,
+    List<dynamic> vibeler,
+    String kullaniciAdi,
+  ) {
+    return Container(
+      color: Colors.white,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 30, 20, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 30),
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Colors.deepOrange.shade50,
+                  child: Text(
+                    kullaniciAdi[0].toUpperCase(),
+                    style: const TextStyle(color: Colors.deepOrange),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  kullaniciAdi,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 25),
+            Text(
+              widget.post['icerik'] ?? '',
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.5,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 35),
+            const Divider(),
+            const SizedBox(height: 20),
+            const Text(
+              "Mekan Karnesi",
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 15),
+            _buildRatingCard(ratings),
+            if (vibeler.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: vibeler
+                    .map(
+                      (v) => Chip(
+                        label: Text("#$v"),
+                        backgroundColor: Colors.grey.shade100,
+                        side: BorderSide.none,
                       ),
-                    ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
-                  // 3. Etkileşim Barı
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.favorite_border),
-                          onPressed: () {
-                            // TODO: Beğeni fonksiyonunu ApiService üzerinden çağırabilirsin
-                          },
-                        ),
-                        Text("${post['begeni_sayisi'] ?? 0} beğeni"),
-                        const SizedBox(width: 10),
-                        IconButton(
-                          icon: const Icon(Icons.bookmark_border),
-                          onPressed: () {
-                            // TODO: Kaydetme fonksiyonu
-                          },
-                        ),
-                      ],
-                    ),
+  Widget _buildBottomBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade100)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 8),
+
+          // GÜNCELLENMİŞ BEĞENİ BUTONU
+          InkWell(
+            onTap: _handleLike,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 4.0,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isLiked ? Icons.favorite : Icons.favorite_border,
+                    size: 28,
+                    color: isLiked ? Colors.red : Colors.black87,
                   ),
-
-                  // 4. Metin İçeriği
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          baslik,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          icerikMetni,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.4,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(
-                          height: 100,
-                        ), // Sayfa sonu dikişi için boşluk
-                      ],
+                  const SizedBox(width: 6),
+                  Text(
+                    "$likeCount",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
+          ),
+
+          const Spacer(),
+          if (widget.post['kullanici_id'] ==
+              widget.supabase.auth.currentUser?.id)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              onPressed: () => _showDeleteDialog(context, widget.post['id']),
+            ),
+          const Icon(Icons.bookmark_border, size: 28),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingCard(Map<String, dynamic> ratings) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          _buildRatingItem(
+            Icons.wifi,
+            "İnternet",
+            (ratings['internet'] ?? 0).toDouble(),
+            Colors.blue,
+          ),
+          _buildRatingItem(
+            Icons.power,
+            "Priz",
+            (ratings['priz'] ?? 0).toDouble(),
+            Colors.green,
+          ),
+          _buildRatingItem(
+            Icons.volume_up,
+            "Ses",
+            (ratings['ses'] ?? 0).toDouble(),
+            Colors.orange,
+          ),
+          _buildRatingItem(
+            Icons.work_outline,
+            "Çalışma",
+            (ratings['calisma'] ?? 0).toDouble(),
+            Colors.purple,
+          ),
+          _buildRatingItem(
+            Icons.people_outline,
+            "Doluluk",
+            (ratings['Kalabalık'] ?? 0).toDouble(),
+            Colors.red,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingItem(
+    IconData icon,
+    String label,
+    double rating,
+    Color color,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                "${rating.toInt()}/5",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          LinearProgressIndicator(
+            value: rating / 5,
+            backgroundColor: color.withOpacity(0.1),
+            color: color,
+            minHeight: 3,
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, dynamic postId) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Postu Sil"),
+        content: const Text("Bu öneriyi kaldırmak istediğine emin misin?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Vazgeç"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await widget.supabase.from('posts').delete().eq('id', postId);
+              if (mounted) {
+                Navigator.pop(dialogContext);
+                Navigator.pop(context);
+                widget.onDelete();
+              }
+            },
+            child: const Text("Sil", style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
