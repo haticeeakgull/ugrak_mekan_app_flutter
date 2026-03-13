@@ -4,9 +4,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CreatePostScreen extends StatefulWidget {
-  final String cafeId;
+  final String? cafeId; // Artık opsiyonel (?)
+  final String? initialCafeName; // Başlıkta göstermek için opsiyonel
 
-  const CreatePostScreen({super.key, required this.cafeId});
+  const CreatePostScreen({super.key, this.cafeId, this.initialCafeName});
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -21,6 +22,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _supabase = Supabase.instance.client;
   final _picker = ImagePicker();
 
+  // --- Kafe Seçimi İçin Gerekli Değişkenler ---
+  String? _selectedCafeId;
+  String? _selectedCafeName;
+  List<Map<String, dynamic>> _allCafes = [];
+  List<Map<String, dynamic>> _filteredCafes = [];
+
   // --- Analiz Değerleri (Slider 1-5) ---
   double _kalabalik = 3;
   double _ses = 3;
@@ -29,7 +36,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   double _calisma = 3;
   double _muzik = 3;
 
-  // --- Vibe Etiketleri ---
   final List<String> _availableVibes = [
     "Sessiz",
     "Modern",
@@ -45,17 +51,129 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   ];
   final List<String> _selectedVibes = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedCafeId = widget.cafeId;
+    _selectedCafeName = widget.initialCafeName;
+
+    // Eğer profil sayfasından geliyorsa (cafeId yoksa) veritabanından kafeleri çek
+    if (_selectedCafeId == null) {
+      _fetchCafes();
+    }
+  }
+
+  Future<void> _fetchCafes() async {
+    try {
+      final data = await _supabase
+          .from('ilce_isimli_kafeler')
+          .select('id, kafe_adi');
+      setState(() {
+        _allCafes = List<Map<String, dynamic>>.from(data);
+        _filteredCafes = _allCafes;
+      });
+    } catch (e) {
+      debugPrint("Kafe listesi çekilemedi: $e");
+    }
+  }
+
+  void _showCafePicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, controller) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "Hangi Mekandasın?",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: "Mekan ara...",
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (val) {
+                    setModalState(() {
+                      _filteredCafes = _allCafes.where((c) {
+                        final name =
+                            c['kafe_adi']?.toString().toLowerCase() ??
+                            ""; // null ise boş string yap
+                        return name.contains(val.toLowerCase());
+                      }).toList();
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView.builder(
+                    controller: controller,
+                    itemCount: _filteredCafes.length,
+                    itemBuilder: (context, index) {
+                      final cafe = _filteredCafes[index];
+                      return ListTile(
+                        leading: const Icon(Icons.coffee, color: Colors.orange),
+                        title: Text(cafe['kafe_adi'] ?? "İsimsiz Mekan"),
+                        onTap: () {
+                          setState(() {
+                            _selectedCafeId = cafe['id'].toString();
+                            _selectedCafeName = cafe['cafe_adi'];
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 70,
     );
-    if (pickedFile != null) {
-      setState(() => _image = File(pickedFile.path));
-    }
+    if (pickedFile != null) setState(() => _image = File(pickedFile.path));
   }
 
   Future<void> _uploadPost() async {
+    if (_selectedCafeId == null) {
+      _showSnackBar("Lütfen bir mekan seçin!");
+      return;
+    }
     if (_image == null ||
         _titleController.text.isEmpty ||
         _contentController.text.isEmpty) {
@@ -69,13 +187,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) throw "Giriş yapmış kullanıcı bulunamadı!";
 
-      // 1. Fotoğrafı Yükle
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = 'cafe_photos/${user.id}/$fileName';
       await _supabase.storage.from('posts').upload(path, _image!);
       final imageUrl = _supabase.storage.from('posts').getPublicUrl(path);
 
-      // 2. Değerlendirme JSON'ını Oluştur
       final Map<String, dynamic> degerlendirme = {
         "kalabalik": _kalabalik.toInt(),
         "ses": _ses.toInt(),
@@ -86,14 +202,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         "secilen_vibeler": _selectedVibes,
       };
 
-      // 3. Veritabanına Kaydet
       await _supabase.from('cafe_postlar').insert({
-        'cafe_id': widget.cafeId,
+        'cafe_id': _selectedCafeId,
         'user_id': user.id,
         'baslik': _titleController.text.trim(),
         'icerik': _contentController.text.trim(),
         'foto_url': imageUrl,
-        'degerlendirme': degerlendirme, // Veritabanındaki jsonb sütunu
+        'degerlendirme': degerlendirme,
         'paylasim_tarihi': DateTime.now().toIso8601String(),
       });
 
@@ -117,83 +232,42 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          "Yeni Mekan Notu",
-          style: TextStyle(color: Colors.black87, fontSize: 18),
+  // --- Widget Parçaları ---
+
+  Widget _buildCafeSelector() {
+    if (widget.cafeId != null) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: _showCafePicker,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withOpacity(0.3)),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            _buildPhotoPicker(),
-            const SizedBox(height: 25),
-            _buildTextFields(),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Divider(thickness: 1),
+            const Icon(Icons.location_on, color: Colors.orange),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _selectedCafeName ?? "Mekan Seçmek İçin Tıkla",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: _selectedCafeName == null
+                      ? Colors.orange
+                      : Colors.black87,
+                ),
+              ),
             ),
-            _buildSectionTitle("Mekan Analizi", Icons.analytics_outlined),
-            const SizedBox(height: 15),
-            _buildSlider(
-              "Kalabalık",
-              Icons.groups,
-              _kalabalik,
-              (v) => setState(() => _kalabalik = v),
-            ),
-            _buildSlider(
-              "Ses Düzeyi",
-              Icons.volume_up,
-              _ses,
-              (v) => setState(() => _ses = v),
-            ),
-            _buildSlider(
-              "Priz Sayısı",
-              Icons.power,
-              _priz,
-              (v) => setState(() => _priz = v),
-            ),
-            _buildSlider(
-              "İnternet Hızı",
-              Icons.wifi,
-              _internet,
-              (v) => setState(() => _internet = v),
-            ),
-            _buildSlider(
-              "Çalışma Uygunluğu",
-              Icons.laptop,
-              _calisma,
-              (v) => setState(() => _calisma = v),
-            ),
-            _buildSlider(
-              "Müzik Seviyesi",
-              Icons.music_note,
-              _muzik,
-              (v) => setState(() => _muzik = v),
-            ),
-            const SizedBox(height: 25),
-            _buildSectionTitle("Vibe Etiketleri", Icons.style_outlined),
-            const SizedBox(height: 12),
-            _buildVibeChips(),
-            const SizedBox(height: 40),
-            _buildSubmitButton(),
-            const SizedBox(height: 40),
+            const Icon(Icons.keyboard_arrow_down, color: Colors.orange),
           ],
         ),
       ),
     );
   }
-
-  // --- Widget Parçaları ---
 
   Widget _buildPhotoPicker() {
     return GestureDetector(
@@ -254,23 +328,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             hintText: 'Burayı neden sevdin? Kahvesi nasıl?',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             prefixIcon: const Icon(Icons.notes),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.deepOrange, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
           ),
         ),
       ],
@@ -343,6 +400,23 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.deepOrange, size: 20),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
@@ -366,6 +440,83 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          _selectedCafeName ?? "Yeni Mekan Notu",
+          style: const TextStyle(color: Colors.black87, fontSize: 18),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCafeSelector(),
+            _buildPhotoPicker(),
+            const SizedBox(height: 25),
+            _buildTextFields(),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Divider(thickness: 1),
+            ),
+            _buildSectionTitle("Mekan Analizi", Icons.analytics_outlined),
+            const SizedBox(height: 15),
+            _buildSlider(
+              "Kalabalık",
+              Icons.groups,
+              _kalabalik,
+              (v) => setState(() => _kalabalik = v),
+            ),
+            _buildSlider(
+              "Ses Düzeyi",
+              Icons.volume_up,
+              _ses,
+              (v) => setState(() => _ses = v),
+            ),
+            _buildSlider(
+              "Priz Sayısı",
+              Icons.power,
+              _priz,
+              (v) => setState(() => _priz = v),
+            ),
+            _buildSlider(
+              "İnternet Hızı",
+              Icons.wifi,
+              _internet,
+              (v) => setState(() => _internet = v),
+            ),
+            _buildSlider(
+              "Çalışma Uygunluğu",
+              Icons.laptop,
+              _calisma,
+              (v) => setState(() => _calisma = v),
+            ),
+            _buildSlider(
+              "Müzik Seviyesi",
+              Icons.music_note,
+              _muzik,
+              (v) => setState(() => _muzik = v),
+            ),
+            const SizedBox(height: 25),
+            _buildSectionTitle("Vibe Etiketleri", Icons.style_outlined),
+            const SizedBox(height: 12),
+            _buildVibeChips(),
+            const SizedBox(height: 40),
+            _buildSubmitButton(),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }

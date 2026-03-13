@@ -94,6 +94,157 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     super.dispose();
   }
 
+  void _showCollectionPicker(String postId) {
+    final TextEditingController _newCollectionController =
+        TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent, // Köşeleri yuvarlatmak için
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+              ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Tutamaç çizgisi
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const Text(
+                    "Koleksiyona Kaydet",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  const SizedBox(height: 15),
+                  // Yeni Koleksiyon Oluşturma Satırı
+                  TextField(
+                    controller: _newCollectionController,
+                    decoration: InputDecoration(
+                      hintText: "Yeni koleksiyon oluştur...",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: BorderSide.none,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: const Icon(
+                          Icons.add_circle,
+                          color: Colors.deepOrange,
+                        ),
+                        onPressed: () async {
+                          if (_newCollectionController.text.isNotEmpty) {
+                            await widget.supabase.from('koleksiyonlar').insert({
+                              'isim': _newCollectionController.text.trim(),
+                              'user_id': widget.supabase.auth.currentUser!.id,
+                            });
+                            _newCollectionController.clear();
+                            setModalState(() {}); // Listeyi yenilemek için
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  // Mevcut Koleksiyonlar Listesi
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.4,
+                    ),
+                    child: FutureBuilder(
+                      future: widget.supabase
+                          .from('koleksiyonlar')
+                          .select()
+                          .eq('user_id', widget.supabase.auth.currentUser!.id),
+                      builder: (context, AsyncSnapshot snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        final collections = snapshot.data as List? ?? [];
+
+                        if (collections.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text("Henüz bir koleksiyonun yok."),
+                          );
+                        }
+
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: collections.length,
+                          itemBuilder: (context, index) {
+                            final coll = collections[index];
+                            return ListTile(
+                              leading: const Icon(
+                                Icons.folder_open,
+                                color: Colors.orange,
+                              ),
+                              title: Text(coll['isim']),
+                              trailing: const Icon(Icons.add, size: 20),
+                              onTap: () async {
+                                try {
+                                  await widget.supabase
+                                      .from('koleksiyon_ogeleri')
+                                      .insert({
+                                        'koleksiyon_id': coll['id'],
+                                        'post_id': postId,
+                                        'user_id': widget
+                                            .supabase
+                                            .auth
+                                            .currentUser!
+                                            .id,
+                                      });
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Koleksiyona eklendi! ✨"),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Bu zaten eklenmiş!"),
+                                    ),
+                                  );
+                                }
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   // --- YENİ: VERİTABANINDAN CANLI SAYI VE DURUM ÇEKME ---
   Future<void> _loadLikeData() async {
     final userId = widget.supabase.auth.currentUser?.id;
@@ -420,7 +571,11 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               onPressed: () => _showDeleteDialog(context, widget.post['id']),
             ),
-          const Icon(Icons.bookmark_border, size: 28),
+          IconButton(
+            icon: const Icon(Icons.bookmark_border, size: 28),
+            onPressed: () =>
+                _showCollectionPicker(widget.post['id'].toString()),
+          ),
         ],
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'create_post_screen.dart'; // Dosya isminin doğruluğundan emin ol
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -26,6 +27,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
+    if (mounted) setState(() => _isLoading = true);
+
     try {
       // 1. Profil Verisini Çek
       final profileResponse = await _supabase
@@ -34,19 +37,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           .eq('id', user.id)
           .maybeSingle();
 
-      debugPrint("DEBUG: Gelen Profil Verisi -> $profileResponse");
-
-      // 2. Postları Çek (Hata ihtimaline karşı try-catch içinde)
-      List<dynamic> postsResponse = [];
-      try {
-        postsResponse = await _supabase
-            .from('posts')
-            .select()
-            .eq('user_id', user.id)
-            .order('created_at', ascending: false);
-      } catch (postError) {
-        debugPrint("DEBUG: Post çekme hatası: $postError");
-      }
+      // 2. Postları Çek
+      final postsResponse = await _supabase
+          .from('cafe_postlar')
+          .select()
+          .eq('user_id', user.id)
+          .order('paylasim_tarihi', ascending: false);
 
       if (mounted) {
         setState(() {
@@ -56,46 +52,155 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         });
       }
     } catch (e) {
-      debugPrint("DEBUG: Genel Profil Hatası: $e");
+      debugPrint("DEBUG: Profil Yükleme Hatası: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // --- ÇIKIŞ ONAY DİYALOĞU ---
-  Future<void> _showLogoutDialog() async {
-    return showDialog<void>(
+  // --- YENİ KOLEKSİYON OLUŞTURMA DİYALOĞU ---
+  Future<void> _showCreateCollectionDialog() async {
+    final TextEditingController controller = TextEditingController();
+    return showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+      builder: (context) => AlertDialog(
+        title: const Text("Yeni Koleksiyon"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: "Koleksiyon adı (örn: Sessiz Kafeler)",
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.deepOrange),
+            ),
           ),
-          title: const Text('Çıkış Yap'),
-          content: const Text('Çıkış yapmak istediğinizden emin misiniz?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('İptal', style: TextStyle(color: Colors.grey)),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Vazgeç", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
+            onPressed: () async {
+              if (controller.text.isNotEmpty) {
+                await _supabase.from('koleksiyonlar').insert({
+                  'isim': controller.text.trim(),
+                  'user_id': _supabase.auth.currentUser!.id,
+                });
+                Navigator.pop(context);
+                setState(
+                  () {},
+                ); // Listeyi yenilemek için FutureBuilder'ı tetikler
+              }
+            },
+            child: const Text("Oluştur", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- KOLEKSİYON GRİD YAPISI (DÜZELTİLDİ) ---
+  Widget _buildCollectionGrid() {
+    final user = _supabase.auth.currentUser;
+    return FutureBuilder(
+      future: _supabase
+          .from('koleksiyonlar')
+          .select()
+          .eq('user_id', user?.id ?? ''),
+      builder: (context, AsyncSnapshot snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.deepOrange),
+          );
+        }
+
+        final collections = snapshot.data as List? ?? [];
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(10),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: collections.length + 1, // +1 "Yeni Ekle" butonu için
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              // Yeni Koleksiyon Ekleme Kartı
+              return InkWell(
+                onTap: _showCreateCollectionDialog,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: Colors.orange.shade200,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        size: 40,
+                        color: Colors.orange,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        "Yeni Oluştur",
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              );
+            }
+
+            final collection = collections[index - 1];
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
               ),
-              child: const Text('Çıkış Yap'),
-              onPressed: () async {
-                Navigator.of(context).pop(); // Diyaloğu kapat
-                await _supabase.auth.signOut();
-                if (mounted) {
-                  Navigator.pushReplacementNamed(context, '/login');
-                }
-              },
-            ),
-          ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.folder_special,
+                    size: 45,
+                    color: Colors.deepOrange,
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      collection['isim'],
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -115,21 +220,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          _profileData?['username'] ?? "Uğrak Noktam",
+          _profileData?['username'] ?? "Profil",
           style: const TextStyle(
             color: Colors.black,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-            onPressed: () => Navigator.pushNamed(context, '/complete_profile'),
-            icon: const Icon(Icons.edit_note, color: Colors.black, size: 28),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreatePostScreen(),
+                ),
+              );
+              _loadAllProfileData();
+            },
+            icon: const Icon(
+              Icons.add_box_outlined,
+              color: Colors.deepOrange,
+              size: 28,
+            ),
           ),
           IconButton(
-            onPressed: _showLogoutDialog, // Diyaloğu çağırır
+            onPressed: _showLogoutDialog,
             icon: const Icon(Icons.logout, color: Colors.redAccent),
           ),
         ],
@@ -144,7 +261,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   children: [
                     _buildProfileHeader(),
                     _buildBadgeSection(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
                   ],
                 ),
               ),
@@ -159,7 +276,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       Tab(icon: Icon(Icons.grid_on), text: "Uğraklarım"),
                       Tab(
                         icon: Icon(Icons.bookmark_border),
-                        text: "Kaydedilenler",
+                        text: "Koleksiyonlarım",
                       ),
                     ],
                   ),
@@ -168,12 +285,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ];
           },
           body: TabBarView(
-            children: [_buildPostGrid(_userPosts), _buildPostGrid([])],
+            children: [
+              _buildPostGrid(_userPosts),
+              _buildCollectionGrid(), // BURASI DÜZELTİLDİ: Fonksiyon çağrıldı
+            ],
           ),
         ),
       ),
     );
   }
+
+  // --- DİĞER YARDIMCI WIDGETLAR (DEĞİŞMEDİ) ---
 
   Widget _buildProfileHeader() {
     return Padding(
@@ -187,15 +309,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 radius: 45,
                 backgroundColor: Colors.grey[200],
                 backgroundImage: _profileData?['avatar_url'] != null
-                    ? NetworkImage(
-                        _profileData!['avatar_url'].toString().startsWith(
-                              'http',
-                            )
-                            ? _profileData!['avatar_url']
-                            : _supabase.storage
-                                  .from('AVATARS')
-                                  .getPublicUrl(_profileData!['avatar_url']),
-                      )
+                    ? NetworkImage(_profileData!['avatar_url'])
                     : null,
                 child: _profileData?['avatar_url'] == null
                     ? const Icon(Icons.person, size: 50, color: Colors.grey)
@@ -215,10 +329,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
           const SizedBox(height: 15),
           Text(
-            _profileData?['full_name'] ?? "İsimsiz Kullanıcı",
+            _profileData?['full_name'] ?? "Kullanıcı",
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Text(
             _profileData?['bio'] ?? "Henüz bir bio eklenmemiş.",
             style: const TextStyle(fontSize: 14, color: Colors.black87),
@@ -241,26 +355,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 80,
+          height: 60,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.only(left: 20),
             itemCount: 3,
-            itemBuilder: (context, index) {
-              return Container(
-                width: 70,
-                margin: const EdgeInsets.only(right: 15),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.workspace_premium,
-                  color: Colors.orange,
-                  size: 35,
-                ),
-              );
-            },
+            itemBuilder: (context, index) => Container(
+              width: 60,
+              margin: const EdgeInsets.only(right: 15),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.workspace_premium,
+                color: Colors.orange,
+                size: 30,
+              ),
+            ),
           ),
         ),
       ],
@@ -279,9 +391,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         mainAxisSpacing: 2,
       ),
       itemCount: posts.length,
-      itemBuilder: (context, index) {
-        return Image.network(posts[index]['image_url'], fit: BoxFit.cover);
-      },
+      itemBuilder: (context, index) => Image.network(
+        posts[index]['foto_url'],
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[100],
+          child: const Icon(Icons.broken_image, color: Colors.grey),
+        ),
+      ),
     );
   }
 
@@ -296,18 +413,38 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ],
     );
   }
+
+  Future<void> _showLogoutDialog() async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Çıkış Yap'),
+        content: const Text('Emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _supabase.auth.signOut();
+              if (mounted) Navigator.pushReplacementNamed(context, '/login');
+            },
+            child: const Text('Çıkış', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// --- SLIVER DELEGATE ---
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
   final TabBar _tabBar;
-
   @override
   double get minExtent => _tabBar.preferredSize.height;
   @override
   double get maxExtent => _tabBar.preferredSize.height;
-
   @override
   Widget build(
     BuildContext context,
