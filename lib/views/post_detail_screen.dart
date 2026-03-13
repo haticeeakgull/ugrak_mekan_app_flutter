@@ -42,9 +42,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         itemBuilder: (context, index) {
           final post = widget.allPosts[index];
           return _HorizontalPostContainer(
-            key: ValueKey(
-              post['id'],
-            ), // ÖNEMLİ: Durumu korumak için ID bazlı key
+            key: ValueKey(post['id']), // Her post için benzersiz key
             post: post,
             supabase: supabase,
             onDelete: () => setState(() {
@@ -77,17 +75,17 @@ class _HorizontalPostContainer extends StatefulWidget {
 class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
   late PageController _horizontalController;
 
-  // Beğeni durumları
   bool isLiked = false;
-  late int likeCount;
-  bool isSyncing = false; // Çakışmaları önlemek için
+  int likeCount = 0;
+  bool isSyncing = false;
+  bool isLoadingLikes = true; // İlk açılışta sayının yüklenmesi için
 
   @override
   void initState() {
     super.initState();
     _horizontalController = PageController();
-    likeCount = widget.post['begeni_sayisi'] ?? 0;
-    _checkInitialLikeStatus(); // Sayfa açıldığında veritabanına sor
+    // İlk açılışta hem beğeni sayısını hem de kullanıcının beğenip beğenmediğini çekiyoruz
+    _loadLikeData();
   }
 
   @override
@@ -96,93 +94,96 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     super.dispose();
   }
 
-  // Veritabanından mevcut beğeni durumunu kontrol etme
-  Future<void> _checkInitialLikeStatus() async {
+  // --- YENİ: VERİTABANINDAN CANLI SAYI VE DURUM ÇEKME ---
+  Future<void> _loadLikeData() async {
     final userId = widget.supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    final postId = widget.post['id'];
 
     try {
+      // 1. Toplam beğeni sayısını say (DÜZELTİLMİŞ KISIM)
+      // count: CountOption.exact parametresini select içine alıyoruz
       final response = await widget.supabase
           .from('post_likes')
-          .select()
-          .eq('post_id', widget.post['id'])
-          .eq('user_id', userId)
-          .maybeSingle();
+          .select('*')
+          .eq('post_id', postId)
+          .count(
+            CountOption.exact,
+          ); // Count artık select dışında veya farklı bir yapıda olabilir
+
+      // 2. Kullanıcı beğenmiş mi kontrol et
+      bool userLiked = false;
+      if (userId != null) {
+        final likeRes = await widget.supabase
+            .from('post_likes')
+            .select()
+            .eq('post_id', postId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        userLiked = likeRes != null;
+      }
 
       if (mounted) {
         setState(() {
-          isLiked = response != null;
+          // response.count doğrudan toplam sayıyı verir
+          likeCount = response.count;
+          isLiked = userLiked;
+          isLoadingLikes = false;
         });
       }
     } catch (e) {
-      debugPrint("Beğeni durumu kontrol hatası: $e");
+      debugPrint("Beğeni verisi yüklenirken hata: $e");
+      if (mounted) setState(() => isLoadingLikes = false);
     }
   }
 
-  // Geliştirilmiş Beğeni Fonksiyonu
+  // --- GÜNCELLENMİŞ BEĞENİ FONKSİYONU (SÜTUNSUZ) ---
   Future<void> _handleLike() async {
-    // Eğer halihazırda bir işlem sürüyorsa yeni tıklamayı reddet
     if (isSyncing) return;
 
     final userId = widget.supabase.auth.currentUser?.id;
     if (userId == null) return;
 
-    // İşlemi kilitle
     setState(() => isSyncing = true);
 
-    // Mevcut durumu yedekle (Hata olursa geri dönmek için)
-    final bool originalStatus = isLiked;
-    final int originalCount = likeCount;
+    // Optimistik Güncelleme (Hız hissi için)
+    final bool originalIsLiked = isLiked;
+    final int originalLikeCount = likeCount;
 
-    // 1. Arayüzü anında güncelle (Optimistic Update)
     setState(() {
       isLiked = !isLiked;
       likeCount = isLiked ? likeCount + 1 : likeCount - 1;
     });
 
     try {
-      if (originalStatus) {
-        // Zaten beğenilmişti -> SİL
+      if (originalIsLiked) {
+        // Beğeniyi kaldır
         await widget.supabase
             .from('post_likes')
             .delete()
             .eq('post_id', widget.post['id'])
             .eq('user_id', userId);
       } else {
-        // Beğenilmemişti -> EKLE (Upsert kullanarak çakışmayı önle)
-        await widget.supabase.from('post_likes').upsert(
-          {'post_id': widget.post['id'], 'user_id': userId},
-          onConflict: 'user_id, post_id',
-        ); // Çakışma olursa görmezden gel/güncelle
+        // Beğeni ekle
+        await widget.supabase.from('post_likes').upsert({
+          'post_id': widget.post['id'],
+          'user_id': userId,
+        }, onConflict: 'user_id, post_id');
       }
-
-      // 2. Ana tablodaki sayacı güncelle
-      await widget.supabase
-          .from('posts')
-          .update({'begeni_sayisi': likeCount})
-          .eq('id', widget.post['id']);
+      // NOT: Burada 'cafe_postlar' tablosuna update atmıyoruz, sütun yok çünkü!
     } catch (e) {
-      // Hata durumunda (İnternet kopması vs.) arayüzü eski haline çek
+      // Hata olursa eski haline döndür
       if (mounted) {
         setState(() {
-          isLiked = originalStatus;
-          likeCount = originalCount;
+          isLiked = originalIsLiked;
+          likeCount = originalLikeCount;
         });
-
-        // Eğer hata "zaten var" hatasıysa kullanıcıya hissettirme, durumu düzelt
-        if (e.toString().contains("23505")) {
-          _checkInitialLikeStatus(); // Veritabanıyla durumu eşitle
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("İşlem gerçekleştirilemedi.")),
-          );
-        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Bağlantı hatası.")));
       }
-      debugPrint("Beğeni Hatası Detay: $e");
+      debugPrint("Beğeni işlemi hatası: $e");
     } finally {
-      if (mounted) {
-        setState(() => isSyncing = false);
-      }
+      if (mounted) setState(() => isSyncing = false);
     }
   }
 
@@ -222,9 +223,11 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     );
   }
 
+  // --- SAYFA TASARIMLARI (DEĞİŞMEDİ) ---
+
   Widget _buildMainPage(BuildContext context, String kullaniciAdi) {
     return GestureDetector(
-      onDoubleTap: _handleLike, // Çift tıklama her zaman beğeniye gider
+      onDoubleTap: _handleLike,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -372,7 +375,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           ),
           const SizedBox(width: 8),
 
-          // GÜNCELLENMİŞ BEĞENİ BUTONU
+          // BEĞENİ BUTONU (YÜKLENME DURUMLU)
           InkWell(
             onTap: _handleLike,
             borderRadius: BorderRadius.circular(20),
@@ -389,13 +392,22 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                     color: isLiked ? Colors.red : Colors.black87,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    "$likeCount",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
+                  isLoadingLikes
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : Text(
+                          "$likeCount",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                 ],
               ),
             ),
@@ -413,6 +425,8 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
       ),
     );
   }
+
+  // --- YARDIMCI WIDGETLAR ---
 
   Widget _buildRatingCard(Map<String, dynamic> ratings) {
     return Container(
@@ -516,7 +530,10 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           ),
           TextButton(
             onPressed: () async {
-              await widget.supabase.from('posts').delete().eq('id', postId);
+              await widget.supabase
+                  .from('cafe_postlar')
+                  .delete()
+                  .eq('id', postId);
               if (mounted) {
                 Navigator.pop(dialogContext);
                 Navigator.pop(context);
