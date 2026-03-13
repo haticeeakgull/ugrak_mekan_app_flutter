@@ -59,25 +59,14 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   Future<void> _deleteComment(dynamic commentId) async {
     try {
-      // 1. Supabase'den sil
-      await supabase
-          .from('cafe_yorumlar')
-          // Buradaki 'id' sütun isminin veritabanında doğru olduğundan emin ol
-          .delete()
-          .eq('id', commentId);
-
-      // 2. UI'ı güncelle
-      setState(() {
-        // FutureBuilder zaten tetiklenecek ama anlık tepki için ideal
-      });
-
+      await supabase.from('cafe_yorumlar').delete().eq('id', commentId);
+      setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Yorum silindi.')));
       }
     } catch (e) {
-      print("Yorum silme hatası: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
@@ -87,28 +76,23 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   }
 
   Future<List<Map<String, dynamic>>> _fetchCafePosts() async {
-    // Postlar için join: user_id üzerinden profiles tablosuna git
     final response = await supabase
         .from('cafe_postlar')
         .select('*, profiles:user_id (username)')
         .eq('cafe_id', widget.cafe.id)
         .order('paylasim_tarihi', ascending: false);
-
     return List<Map<String, dynamic>>.from(response);
   }
 
   Future<List<Map<String, dynamic>>> _fetchComments() async {
-    // YORUMLAR İÇİN DÜZELTME: kullanici_id üzerinden profiles join ekledik
     try {
       final response = await supabase
           .from('cafe_yorumlar')
           .select('*, profiles!cafe_yorumlar_kullanici_id_fkey (username)')
           .eq('cafe_id', widget.cafe.id)
           .order('created_at', ascending: false);
-      print("Gelen Yorumlar: $response"); // Verinin yapısını konsolda gör
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print("Yorum çekme hatası: $e");
       return [];
     }
   }
@@ -122,7 +106,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       final user = supabase.auth.currentUser;
       if (user == null) throw "Giriş yapın.";
 
-      // DÜZELTME: Artık kullanici_adi göndermiyoruz, sadece ID yeterli
       await supabase.from('cafe_yorumlar').insert({
         'cafe_id': widget.cafe.id,
         'kullanici_id': user.id,
@@ -131,12 +114,155 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
       _commentController.clear();
       FocusScope.of(context).unfocus();
-      setState(() {}); // Listeyi yenilemek için
+      setState(() {});
     } catch (e) {
-      print("Yorum gönderme hatası: $e");
+      print("Hata: $e");
     } finally {
       setState(() => _isSending = false);
     }
+  }
+
+  // --- Koleksiyon İşlemi ---
+
+  void _showCollectionPicker(String postId) {
+    final TextEditingController newCollectionController =
+        TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+              ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const Text(
+                    "Koleksiyona Kaydet",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: newCollectionController,
+                    decoration: InputDecoration(
+                      hintText: "Yeni koleksiyon oluştur...",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: BorderSide.none,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: const Icon(
+                          Icons.add_circle,
+                          color: Colors.deepOrange,
+                        ),
+                        onPressed: () async {
+                          if (newCollectionController.text.isNotEmpty) {
+                            await supabase.from('koleksiyonlar').insert({
+                              'isim': newCollectionController.text.trim(),
+                              'user_id': supabase.auth.currentUser!.id,
+                            });
+                            newCollectionController.clear();
+                            setModalState(() {});
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.4,
+                    ),
+                    child: FutureBuilder(
+                      future: supabase
+                          .from('koleksiyonlar')
+                          .select()
+                          .eq('user_id', supabase.auth.currentUser!.id),
+                      builder: (context, AsyncSnapshot snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting)
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        final collections = snapshot.data as List? ?? [];
+                        if (collections.isEmpty)
+                          return const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text("Henüz bir koleksiyonun yok."),
+                          );
+
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: collections.length,
+                          itemBuilder: (context, index) {
+                            final coll = collections[index];
+                            return ListTile(
+                              leading: const Icon(
+                                Icons.folder_open,
+                                color: Colors.orange,
+                              ),
+                              title: Text(coll['isim']),
+                              trailing: const Icon(Icons.add, size: 20),
+                              onTap: () async {
+                                try {
+                                  await supabase
+                                      .from('koleksiyon_ogeleri')
+                                      .insert({
+                                        'koleksiyon_id': coll['id'],
+                                        'post_id': postId,
+                                        'user_id':
+                                            supabase.auth.currentUser!.id,
+                                      });
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Koleksiyona eklendi! ✨"),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Bu zaten eklenmiş!"),
+                                    ),
+                                  );
+                                }
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   // --- Widget Yapısı ---
@@ -174,12 +300,31 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    widget.cafe.kafeAdi,
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          widget.cafe.kafeAdi,
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      // İŞTE İSTEDİĞİN BUTON BURADA:
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.bookmark_border,
+                                          color: Colors.deepOrange,
+                                          size: 28,
+                                        ),
+                                        onPressed: () => _showCollectionPicker(
+                                          widget.cafe.id.toString(),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 10),
                                   Wrap(
@@ -264,13 +409,12 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _fetchCafePosts(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting)
               return const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               );
-            }
             final posts = snapshot.data ?? [];
-            if (posts.isEmpty) {
+            if (posts.isEmpty)
               return const SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
@@ -279,7 +423,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                   ),
                 ),
               );
-            }
             return SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList(
@@ -314,7 +457,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   Widget _buildCommentCard(Map<String, dynamic> yorum) {
     final String yazarAdi = yorum['profiles']?['username'] ?? 'Anonim';
-
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(16),
@@ -340,9 +482,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                     size: 20,
                     color: Colors.red,
                   ),
-                  onPressed: () {
-                    _deleteComment(yorum['id']);
-                  },
+                  onPressed: () => _deleteComment(yorum['id']),
                 ),
             ],
           ),
@@ -359,15 +499,13 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     int index,
   ) {
     return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                PostDetailScreen(allPosts: allPosts, initialIndex: index),
-          ),
-        );
-      },
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              PostDetailScreen(allPosts: allPosts, initialIndex: index),
+        ),
+      ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -385,18 +523,27 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                     width: double.infinity,
                     fit: BoxFit.cover,
                   ),
-                if (post['user_id'] == supabase.auth.currentUser?.id)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.white.withOpacity(0.8),
-                      child: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deletePost(post['id']),
-                      ),
-                    ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      if (post['user_id'] == supabase.auth.currentUser?.id)
+                        CircleAvatar(
+                          backgroundColor: Colors.white.withOpacity(0.8),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.delete,
+                              color: Colors.red,
+                              size: 20,
+                            ),
+                            onPressed: () => _deletePost(post['id']),
+                          ),
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
             Padding(
@@ -477,43 +624,28 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
-  // --- Mevcut _buildPhotoGallery widget'ını bu şekilde güncelle ---
   Widget _buildPhotoGallery() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future:
-          _fetchCafePosts(), // Zaten yukarıda yazdığın fonksiyonu kullanıyoruz
+      future: _fetchCafePosts(),
       builder: (context, snapshot) {
-        // Sabit fotoğraflar (Cafe modelinden gelenler)
         List<String> allImages = List.from(widget.cafe.fotograflar);
-
-        // Kullanıcı postlarından gelen fotoğrafları ekle
         if (snapshot.hasData) {
           final postImages = snapshot.data!
-              .where(
-                (post) => post['foto_url'] != null,
-              ) // Fotoğrafı olanları seç
+              .where((post) => post['foto_url'] != null)
               .map((post) => post['foto_url'] as String)
               .toList();
           allImages.addAll(postImages);
         }
-
-        if (allImages.isEmpty) {
+        if (allImages.isEmpty)
           return const SizedBox(
             height: 140,
             child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.image_not_supported_outlined, color: Colors.grey),
-                  Text(
-                    "Henüz fotoğraf yok",
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
+              child: Text(
+                "Henüz fotoğraf yok",
+                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ),
           );
-        }
 
         return SizedBox(
           height: 140,
@@ -527,13 +659,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                 margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                   image: DecorationImage(
                     image: NetworkImage(allImages[index]),
                     fit: BoxFit.cover,

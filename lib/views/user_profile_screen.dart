@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'create_post_screen.dart'; // Dosya isminin doğruluğundan emin ol
+import 'create_post_screen.dart';
+// DİKKAT: Yeni oluşturduğun detay sayfasının dosya adını buraya doğru yaz:
+import 'collection_detail_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -22,7 +24,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _loadAllProfileData();
   }
 
-  // --- VERİ ÇEKME FONKSİYONU ---
   Future<void> _loadAllProfileData() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
@@ -30,14 +31,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (mounted) setState(() => _isLoading = true);
 
     try {
-      // 1. Profil Verisini Çek
       final profileResponse = await _supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
-      // 2. Postları Çek
       final postsResponse = await _supabase
           .from('cafe_postlar')
           .select()
@@ -57,7 +56,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
-  // --- YENİ KOLEKSİYON OLUŞTURMA DİYALOĞU ---
   Future<void> _showCreateCollectionDialog() async {
     final TextEditingController controller = TextEditingController();
     return showDialog(
@@ -87,9 +85,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   'user_id': _supabase.auth.currentUser!.id,
                 });
                 Navigator.pop(context);
-                setState(
-                  () {},
-                ); // Listeyi yenilemek için FutureBuilder'ı tetikler
+                setState(() {});
               }
             },
             child: const Text("Oluştur", style: TextStyle(color: Colors.white)),
@@ -99,7 +95,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  // --- KOLEKSİYON GRİD YAPISI (DÜZELTİLDİ) ---
   Widget _buildCollectionGrid() {
     final user = _supabase.auth.currentUser;
     return FutureBuilder(
@@ -124,10 +119,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             crossAxisSpacing: 10,
             childAspectRatio: 1.1,
           ),
-          itemCount: collections.length + 1, // +1 "Yeni Ekle" butonu için
+          itemCount: collections.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
-              // Yeni Koleksiyon Ekleme Kartı
               return InkWell(
                 onTap: _showCreateCollectionDialog,
                 child: Container(
@@ -162,42 +156,56 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             }
 
             final collection = collections[index - 1];
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-                border: Border.all(color: Colors.grey.shade100),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.folder_special,
-                    size: 45,
-                    color: Colors.deepOrange,
-                  ),
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text(
-                      collection['isim'],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            // BURASI GÜNCELLENDİ: Tıklayınca detaya gider
+            return InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CollectionDetailScreen(
+                      collectionId: collection['id'].toString(),
+                      collectionName: collection['isim'],
                     ),
                   ),
-                ],
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.folder_special,
+                      size: 45,
+                      color: Colors.deepOrange,
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text(
+                        collection['isim'],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -285,18 +293,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ];
           },
           body: TabBarView(
-            children: [
-              _buildPostGrid(_userPosts),
-              _buildCollectionGrid(), // BURASI DÜZELTİLDİ: Fonksiyon çağrıldı
-            ],
+            children: [_buildPostGrid(_userPosts), _buildCollectionGrid()],
           ),
         ),
       ),
     );
   }
 
-  // --- DİĞER YARDIMCI WIDGETLAR (DEĞİŞMEDİ) ---
-
+  // --- YARDIMCI WIDGETLAR ---
   Widget _buildProfileHeader() {
     return Padding(
       padding: const EdgeInsets.all(20.0),
@@ -380,9 +384,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildPostGrid(List<dynamic> posts) {
-    if (posts.isEmpty) {
+    if (posts.isEmpty)
       return const Center(child: Text("Henüz bir paylaşım yok."));
-    }
     return GridView.builder(
       padding: const EdgeInsets.all(2),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -396,7 +399,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) => Container(
           color: Colors.grey[100],
-          child: const Icon(Icons.broken_image, color: Colors.grey),
+          child: const Icon(Icons.broken_image),
         ),
       ),
     );
