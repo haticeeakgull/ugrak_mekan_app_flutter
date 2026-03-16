@@ -122,11 +122,12 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     }
   }
 
-  // --- Koleksiyon İşlemi ---
+  // --- Koleksiyon İşlemi (GÜNCELLENDİ) ---
 
   void _showCollectionPicker(String postId) {
     final TextEditingController newCollectionController =
         TextEditingController();
+    bool isNewPublic = true; // Yeni koleksiyonun başlangıç durumu
 
     showModalBottomSheet(
       context: context,
@@ -169,6 +170,15 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                       hintText: "Yeni koleksiyon oluştur...",
                       filled: true,
                       fillColor: Colors.grey[100],
+                      prefixIcon: IconButton(
+                        icon: Icon(
+                          isNewPublic ? Icons.public : Icons.lock_outline,
+                          color: isNewPublic ? Colors.green : Colors.grey,
+                        ),
+                        onPressed: () {
+                          setModalState(() => isNewPublic = !isNewPublic);
+                        },
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
                         borderSide: BorderSide.none,
@@ -183,6 +193,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             await supabase.from('koleksiyonlar').insert({
                               'isim': newCollectionController.text.trim(),
                               'user_id': supabase.auth.currentUser!.id,
+                              'is_public': isNewPublic, // Gizlilik durumu
                             });
                             newCollectionController.clear();
                             setModalState(() {});
@@ -200,38 +211,73 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                       future: supabase
                           .from('koleksiyonlar')
                           .select()
-                          .eq('user_id', supabase.auth.currentUser!.id),
+                          .eq('user_id', supabase.auth.currentUser!.id)
+                          .order('id', ascending: false),
                       builder: (context, AsyncSnapshot snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting)
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Center(
                             child: CircularProgressIndicator(),
                           );
+                        }
                         final collections = snapshot.data as List? ?? [];
-                        if (collections.isEmpty)
+                        if (collections.isEmpty) {
                           return const Padding(
                             padding: EdgeInsets.all(20.0),
                             child: Text("Henüz bir koleksiyonun yok."),
                           );
+                        }
 
                         return ListView.builder(
                           shrinkWrap: true,
                           itemCount: collections.length,
                           itemBuilder: (context, index) {
                             final coll = collections[index];
+                            final bool isPublic = coll['is_public'] ?? false;
+
                             return ListTile(
                               leading: const Icon(
                                 Icons.folder_open,
                                 color: Colors.orange,
                               ),
                               title: Text(coll['isim']),
-                              trailing: const Icon(Icons.add, size: 20),
+                              subtitle: Text(
+                                isPublic ? "Herkese Açık" : "Sadece Sen",
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // HIZLI GİZLİLİK DEĞİŞTİRME TUŞU
+                                  IconButton(
+                                    icon: Icon(
+                                      isPublic
+                                          ? Icons.public
+                                          : Icons.lock_outline,
+                                      color: isPublic
+                                          ? Colors.green
+                                          : Colors.grey,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      await supabase
+                                          .from('koleksiyonlar')
+                                          .update({'is_public': !isPublic})
+                                          .eq('id', coll['id']);
+                                      setModalState(
+                                        () {},
+                                      ); // Modal içini tazeler
+                                    },
+                                  ),
+                                  const Icon(Icons.add, size: 20),
+                                ],
+                              ),
                               onTap: () async {
                                 try {
                                   await supabase
                                       .from('koleksiyon_ogeleri')
                                       .insert({
                                         'koleksiyon_id': coll['id'],
-                                        'post_id': postId,
+                                        'cafe_id': widget.cafe.id,
                                         'user_id':
                                             supabase.auth.currentUser!.id,
                                       });
@@ -244,9 +290,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                 } catch (e) {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Bu zaten eklenmiş!"),
-                                    ),
+                                    SnackBar(content: Text("Hata: $e")),
                                   );
                                 }
                               },
@@ -265,7 +309,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
-  // --- Widget Yapısı ---
+  // --- Widget Yapısı (Geri Butonu ve UI) ---
 
   @override
   Widget build(BuildContext context) {
@@ -304,16 +348,22 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
                                     children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.close,
+                                          color: Colors.grey,
+                                        ),
+                                        onPressed: () => Navigator.pop(context),
+                                      ),
                                       Expanded(
                                         child: Text(
                                           widget.cafe.kafeAdi,
                                           style: const TextStyle(
-                                            fontSize: 24,
+                                            fontSize: 22,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ),
-                                      // İŞTE İSTEDİĞİN BUTON BURADA:
                                       IconButton(
                                         icon: const Icon(
                                           Icons.bookmark_border,
@@ -387,6 +437,9 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
+  // (Diğer yardımcı widget'lar _buildPostList, _buildCommentList vb. aynı kalıyor)
+  // ... (Görsel temizlik adına buraya tekrar eklemedim ama senin kodunla birebir aynıdır)
+
   Widget _buildPostList() {
     return CustomScrollView(
       key: const PageStorageKey('oneriler'),
@@ -409,12 +462,13 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _fetchCafePosts(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting)
+            if (snapshot.connectionState == ConnectionState.waiting) {
               return const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               );
+            }
             final posts = snapshot.data ?? [];
-            if (posts.isEmpty)
+            if (posts.isEmpty) {
               return const SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
@@ -423,6 +477,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                   ),
                 ),
               );
+            }
             return SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList(
@@ -526,11 +581,8 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 8),
-                      if (post['user_id'] == supabase.auth.currentUser?.id)
-                        CircleAvatar(
+                  child: post['user_id'] == supabase.auth.currentUser?.id
+                      ? CircleAvatar(
                           backgroundColor: Colors.white.withOpacity(0.8),
                           child: IconButton(
                             icon: const Icon(
@@ -540,9 +592,8 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             ),
                             onPressed: () => _deletePost(post['id']),
                           ),
-                        ),
-                    ],
-                  ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -631,8 +682,8 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
         List<String> allImages = List.from(widget.cafe.fotograflar);
         if (snapshot.hasData) {
           final postImages = snapshot.data!
-              .where((post) => post['foto_url'] != null)
-              .map((post) => post['foto_url'] as String)
+              .where((p) => p['foto_url'] != null)
+              .map((p) => p['foto_url'] as String)
               .toList();
           allImages.addAll(postImages);
         }
@@ -646,26 +697,23 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
               ),
             ),
           );
-
         return SizedBox(
           height: 140,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: allImages.length,
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemBuilder: (context, index) {
-              return Container(
-                width: 220,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  image: DecorationImage(
-                    image: NetworkImage(allImages[index]),
-                    fit: BoxFit.cover,
-                  ),
+            itemBuilder: (context, index) => Container(
+              width: 220,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                image: DecorationImage(
+                  image: NetworkImage(allImages[index]),
+                  fit: BoxFit.cover,
                 ),
-              );
-            },
+              ),
+            ),
           ),
         );
       },

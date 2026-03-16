@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'create_post_screen.dart';
-// DİKKAT: Yeni oluşturduğun detay sayfasının dosya adını buraya doğru yaz:
 import 'collection_detail_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -56,41 +55,119 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
-  Future<void> _showCreateCollectionDialog() async {
-    final TextEditingController controller = TextEditingController();
-    return showDialog(
+  // --- KOLEKSİYON İŞLEMLERİ ---
+
+  // Gizlilik Değiştirme
+  Future<void> _togglePrivacy(String collectionId, bool currentStatus) async {
+    try {
+      await _supabase
+          .from('koleksiyonlar')
+          .update({'is_public': !currentStatus})
+          .eq('id', collectionId);
+      setState(() {});
+    } catch (e) {
+      debugPrint("Gizlilik hatası: $e");
+    }
+  }
+
+  // Koleksiyon Silme
+  Future<void> _deleteCollection(String collectionId) async {
+    // Önce kullanıcıdan onay alalım
+    final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Yeni Koleksiyon"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: "Koleksiyon adı (örn: Sessiz Kafeler)",
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.deepOrange),
-            ),
-          ),
+        title: const Text("Koleksiyonu Sil"),
+        content: const Text(
+          "Bu koleksiyonu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text("Vazgeç", style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
-            onPressed: () async {
-              if (controller.text.isNotEmpty) {
-                await _supabase.from('koleksiyonlar').insert({
-                  'isim': controller.text.trim(),
-                  'user_id': _supabase.auth.currentUser!.id,
-                });
-                Navigator.pop(context);
-                setState(() {});
-              }
-            },
-            child: const Text("Oluştur", style: TextStyle(color: Colors.white)),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Sil", style: TextStyle(color: Colors.red)),
           ),
         ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _supabase.from('koleksiyonlar').delete().eq('id', collectionId);
+        setState(() {}); // Listeyi yenile
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Koleksiyon başarıyla silindi.")),
+          );
+        }
+      } catch (e) {
+        debugPrint("Silme hatası: $e");
+      }
+    }
+  }
+
+  Future<void> _showCreateCollectionDialog() async {
+    final TextEditingController controller = TextEditingController();
+    bool isPublic = true;
+
+    return showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Yeni Koleksiyon"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: "Koleksiyon adı (örn: Favorilerim)",
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.deepOrange),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+              SwitchListTile(
+                title: const Text(
+                  "Herkese Açık",
+                  style: TextStyle(fontSize: 14),
+                ),
+                value: isPublic,
+                activeColor: Colors.deepOrange,
+                onChanged: (val) => setDialogState(() => isPublic = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Vazgeç", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+              ),
+              onPressed: () async {
+                if (controller.text.isNotEmpty) {
+                  await _supabase.from('koleksiyonlar').insert({
+                    'isim': controller.text.trim(),
+                    'user_id': _supabase.auth.currentUser!.id,
+                    'is_public': isPublic,
+                  });
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              },
+              child: const Text(
+                "Oluştur",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -101,7 +178,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       future: _supabase
           .from('koleksiyonlar')
           .select()
-          .eq('user_id', user?.id ?? ''),
+          .eq('user_id', user?.id ?? '')
+          .order('isim', ascending: true),
       builder: (context, AsyncSnapshot snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -128,10 +206,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   decoration: BoxDecoration(
                     color: Colors.orange.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: Colors.orange.shade200,
-                      style: BorderStyle.solid,
-                    ),
+                    border: Border.all(color: Colors.orange.shade200),
                   ),
                   child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -156,14 +231,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             }
 
             final collection = collections[index - 1];
-            // BURASI GÜNCELLENDİ: Tıklayınca detaya gider
+            final bool isPublic = collection['is_public'] ?? true;
+            final String collectionId = collection['id'].toString();
+
             return InkWell(
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => CollectionDetailScreen(
-                      collectionId: collection['id'].toString(),
+                      collectionId: collectionId,
                       collectionName: collection['isim'],
                     ),
                   ),
@@ -182,26 +259,61 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ],
                   border: Border.all(color: Colors.grey.shade100),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Stack(
                   children: [
-                    const Icon(
-                      Icons.folder_special,
-                      size: 45,
-                      color: Colors.deepOrange,
+                    // Ana Gövde
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.folder_special,
+                            size: 45,
+                            color: Colors.deepOrange,
+                          ),
+                          const SizedBox(height: 10),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                            ),
+                            child: Text(
+                              collection['isim'],
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Text(
-                        collection['isim'],
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                    // SAĞ ÜST: Gizlilik Ayarı
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: Icon(
+                          isPublic ? Icons.public : Icons.lock_outline,
+                          size: 18,
+                          color: isPublic ? Colors.green : Colors.grey,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        onPressed: () => _togglePrivacy(collectionId, isPublic),
+                      ),
+                    ),
+                    // SOL ÜST: SİLME BUTONU
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: Colors.redAccent,
+                        ),
+                        onPressed: () => _deleteCollection(collectionId),
                       ),
                     ),
                   ],
@@ -300,7 +412,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  // --- YARDIMCI WIDGETLAR ---
+  // --- Yardımcı Profil Widgetları ---
   Widget _buildProfileHeader() {
     return Padding(
       padding: const EdgeInsets.all(20.0),

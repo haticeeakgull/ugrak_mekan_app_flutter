@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:timeago/timeago.dart' as timeago;
+// Kendi dosya yoluna göre bu importu kontrol et:
+import "package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart";
+import 'package:ugrak_mekan_app/models/cafe_model.dart';
 
 class CollectionDetailScreen extends StatefulWidget {
   final String collectionId;
@@ -19,35 +21,39 @@ class CollectionDetailScreen extends StatefulWidget {
 class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
 
+  // Sadece kafeleri çeken temizlenmiş sorgu
   Future<List<Map<String, dynamic>>> _fetchCollectionItems() async {
-    // Koleksiyon öğelerini çekiyoruz ve içindeki post/kafe bilgilerini joinliyoruz
-    final response = await supabase
-        .from('koleksiyon_ogeleri')
-        .select('''
-          id,
-          cafe_postlar (
+    try {
+      final response = await supabase
+          .from('koleksiyon_ogeleri')
+          .select('''
             id,
-            baslik,
-            foto_url,
-            paylasim_tarihi
-          )
-        ''')
-        .eq('koleksiyon_id', widget.collectionId);
+            cafe_id,
+            ilce_isimli_kafeler (
+              id,
+              kafe_adi
+            )
+          ''')
+          .eq('koleksiyon_id', widget.collectionId);
 
-    return List<Map<String, dynamic>>.from(response);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint("Veri çekme hatası: $e");
+      return [];
+    }
   }
 
   Future<void> _removeFromCollection(dynamic itemId) async {
     try {
       await supabase.from('koleksiyon_ogeleri').delete().eq('id', itemId);
-      setState(() {}); // Listeyi yenile
+      setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Koleksiyondan kaldırıldı.')),
+          const SnackBar(content: Text('Mekan koleksiyondan kaldırıldı.')),
         );
       }
     } catch (e) {
-      print("Kaldırma hatası: $e");
+      debugPrint("Kaldırma hatası: $e");
     }
   }
 
@@ -83,9 +89,10 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
-              final post = item['cafe_postlar'];
+              final cafe = item['ilce_isimli_kafeler'];
 
-              if (post == null) return const SizedBox.shrink();
+              // Eğer veri tabanında bir hata varsa boş dönmesin
+              if (cafe == null) return const SizedBox.shrink();
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -93,26 +100,26 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.all(8),
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      post['foto_url'] ?? 'https://via.placeholder.com/150',
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
+                  contentPadding: const EdgeInsets.all(12),
+                  leading: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.restaurant,
+                      color: Colors.deepOrange,
                     ),
                   ),
                   title: Text(
-                    post['baslik'] ?? 'Başlıksız Post',
+                    cafe['kafe_adi'] ?? 'İsimsiz Mekan',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: Text(
-                    timeago.format(
-                      DateTime.parse(post['paylasim_tarihi']),
-                      locale: 'tr',
-                    ),
-                    style: const TextStyle(fontSize: 12),
+                  subtitle: const Text(
+                    "Kayıtlı Mekan",
+                    style: TextStyle(fontSize: 12),
                   ),
                   trailing: IconButton(
                     icon: const Icon(
@@ -122,7 +129,18 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
                     onPressed: () => _removeFromCollection(item['id']),
                   ),
                   onTap: () {
-                    // Buraya tıklandığında PostDetailScreen'e yönlendirme yapabilirsin
+                    final hamKafeVerisi = item['ilce_isimli_kafeler'];
+                    if (hamKafeVerisi != null) {
+                      final kafeObjesi = Cafe.fromJson(hamKafeVerisi);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              CafeDetailSheet(cafe: kafeObjesi),
+                        ),
+                      );
+                    }
                   },
                 ),
               );

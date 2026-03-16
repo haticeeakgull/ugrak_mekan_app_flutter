@@ -66,8 +66,10 @@ class MapScreen extends StatelessWidget {
       isScrollControlled: true, // Tam ekran kaydırma için şart
       backgroundColor: Colors.transparent,
       builder: (context) => CafeDetailSheet(cafe: kafe),
+      //cafeId: kafe.id,),
     );
   }
+
   // builder: (context) => Container(
   //   padding: const EdgeInsets.all(20),
   //   child: Column(
