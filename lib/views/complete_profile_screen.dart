@@ -18,7 +18,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final _supabase = Supabase.instance.client;
 
   bool _isLoading = false;
-  bool _hasChanges = false; // Değişiklik kontrolü için
+  bool _hasChanges = false;
+  bool _isPrivate = false; // Hesabın gizlilik durumu
   File? _imageFile;
   String? _avatarUrl;
 
@@ -34,7 +35,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     _emailController.addListener(_onFieldChanged);
   }
 
-  // Değişiklik algılandığında state'i güncelle
   void _onFieldChanged() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
@@ -71,12 +71,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           _fullNameController.text = data['full_name'] ?? "";
           _bioController.text = data['bio'] ?? "";
           _avatarUrl = data['avatar_url'];
-          // Veriler ilk yüklendiğinde "değişiklik yok" sayıyoruz
+          _isPrivate =
+              data['is_private'] ??
+              false; // Veritabanından gizlilik bilgisini al
           _hasChanges = false;
         });
       }
     } catch (e) {
-      print("Veri çekme hatası: $e");
+      debugPrint("Veri çekme hatası: $e");
     }
   }
 
@@ -90,7 +92,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (image != null) {
       setState(() {
         _imageFile = File(image.path);
-        _hasChanges = true; // Fotoğraf seçildiğinde buton güncellensin
+        _hasChanges = true;
       });
     }
   }
@@ -100,12 +102,12 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    List<String> updatedItems = []; // Kullanıcıya raporlamak için
+    List<String> updatedItems = [];
 
     try {
       String? finalAvatarUrl = _avatarUrl;
 
-      // 1. Fotoğraf Yükleme
+      // 1. Fotoğraf Yükleme İşlemi
       if (_imageFile != null) {
         final userId = user.id;
         final fileExt = _imageFile!.path.split('.').last;
@@ -126,43 +128,34 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         updatedItems.add("Profil fotoğrafı");
       }
 
-      // 2. Profil Bilgileri
+      // 2. Profil Bilgilerini Güncelleme (is_private eklendi)
       await _supabase.from('profiles').upsert({
         'id': user.id,
         'username': _usernameController.text.trim(),
         'full_name': _fullNameController.text.trim(),
         'bio': _bioController.text.trim(),
         'avatar_url': finalAvatarUrl,
+        'is_private': _isPrivate, // Gizlilik ayarını kaydet
       });
       updatedItems.add("Profil bilgileri");
 
-      // 3. E-posta Güncelleme
-      bool emailChanged = false;
+      // 3. E-posta Güncelleme Kontrolü
       if (_emailController.text.trim() != user.email) {
         await _supabase.auth.updateUser(
           UserAttributes(email: _emailController.text.trim()),
         );
-        emailChanged = true;
-        updatedItems.add("E-posta adresi");
+        updatedItems.add("E-posta adresi (onay bekliyor)");
       }
 
       if (mounted) {
-        // Rapor Mesajı Oluşturma
-        String report = "${updatedItems.join(', ')} başarıyla güncellendi.";
-        if (emailChanged) report += "\nLütfen yeni e-postanızı onaylayın.";
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(report),
+            content: Text("${updatedItems.join(', ')} güncellendi."),
             backgroundColor: Colors.green[700],
             behavior: SnackBarBehavior.floating,
           ),
         );
-
-        setState(() => _hasChanges = false); // Butonu eski haline getir
-
-        // Eğer her şey tamamsa ve kullanıcı ilk defa gelmiyorsa yönlendirilebilir
-        // Navigator.pushReplacementNamed(context, '/home');
+        setState(() => _hasChanges = false);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,6 +168,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final Color themeColor = _hasChanges
+        ? Colors.blueAccent
+        : Colors.deepOrange;
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -214,8 +211,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       onTap: _pickImage,
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Colors.deepOrange,
+                        decoration: BoxDecoration(
+                          color: themeColor,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -235,12 +232,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               controller: _fullNameController,
               label: "Ad Soyad",
               icon: Icons.badge_outlined,
+              themeColor: themeColor,
             ),
             const SizedBox(height: 16),
             _buildCustomField(
               controller: _usernameController,
               label: "Kullanıcı Adı",
               icon: Icons.alternate_email,
+              themeColor: themeColor,
             ),
             const SizedBox(height: 16),
             _buildCustomField(
@@ -248,6 +247,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               label: "Bio (Kısaca sen)",
               icon: Icons.notes_rounded,
               maxLines: 3,
+              themeColor: themeColor,
             ),
 
             const Padding(
@@ -263,24 +263,61 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // --- GİZLİLİK AYARI (YENİ) ---
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: SwitchListTile(
+                title: const Text(
+                  "Gizli Hesap",
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text(
+                  "İçeriklerini sadece takipçilerin görebilir.",
+                ),
+                value: _isPrivate,
+                activeColor: Colors.blueAccent,
+                secondary: Icon(
+                  _isPrivate ? Icons.lock_outline : Icons.lock_open,
+                  color: themeColor,
+                ),
+                onChanged: (bool value) {
+                  setState(() {
+                    _isPrivate = value;
+                    _hasChanges = true;
+                  });
+                },
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             _buildCustomField(
               controller: _emailController,
               label: "E-posta Adresi",
               icon: Icons.email_outlined,
+              themeColor: themeColor,
             ),
 
             const SizedBox(height: 40),
 
-            // --- DİNAMİK BUTON ---
+            // --- GÜNCELLEME BUTONU ---
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _updateProfile,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _hasChanges
-                      ? Colors.blueAccent
-                      : Colors.deepOrange, // Değişiklik varsa renk değişsin
+                  backgroundColor: themeColor,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -308,6 +345,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    required Color themeColor,
     int maxLines = 1,
   }) {
     return Container(
@@ -327,10 +365,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(
-            icon,
-            color: _hasChanges ? Colors.blueAccent : Colors.deepOrange,
-          ),
+          prefixIcon: Icon(icon, color: themeColor),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
