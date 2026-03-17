@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart'; // Paylaşım için gerekli
 import 'create_post_screen.dart';
 import 'collection_detail_screen.dart';
 
@@ -23,6 +24,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _loadAllProfileData();
   }
 
+  // --- VERİ YÜKLEME ---
   Future<void> _loadAllProfileData() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
@@ -57,6 +59,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   // --- KOLEKSİYON İŞLEMLERİ ---
 
+  // Paylaşım Yapma
+  Future<void> _shareCollection(
+    String collectionName,
+    String collectionId,
+  ) async {
+    // Senin GitHub Pages üzerinden oluşturduğun gerçek yol
+    final String shareLink =
+        "https://haticeeakgull.github.io/koleksiyon/$collectionId";
+
+    final String message =
+        "Uğrak'taki '$collectionName' koleksiyonuma göz at! 🏙️\n"
+        "Mekanları görmek için tıkla: $shareLink";
+
+    await Share.share(message);
+  }
+
   // Gizlilik Değiştirme
   Future<void> _togglePrivacy(String collectionId, bool currentStatus) async {
     try {
@@ -64,7 +82,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           .from('koleksiyonlar')
           .update({'is_public': !currentStatus})
           .eq('id', collectionId);
-      setState(() {});
+      setState(() {}); // Arayüzü yenile
     } catch (e) {
       debugPrint("Gizlilik hatası: $e");
     }
@@ -72,7 +90,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   // Koleksiyon Silme
   Future<void> _deleteCollection(String collectionId) async {
-    // Önce kullanıcıdan onay alalım
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -96,18 +113,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (confirm == true) {
       try {
         await _supabase.from('koleksiyonlar').delete().eq('id', collectionId);
-        setState(() {}); // Listeyi yenile
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Koleksiyon başarıyla silindi.")),
-          );
-        }
+        setState(() {});
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Koleksiyon silindi.")));
       } catch (e) {
         debugPrint("Silme hatası: $e");
       }
     }
   }
 
+  // Yeni Koleksiyon Oluşturma Dialogu
   Future<void> _showCreateCollectionDialog() async {
     final TextEditingController controller = TextEditingController();
     bool isPublic = true;
@@ -123,7 +140,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               TextField(
                 controller: controller,
                 decoration: const InputDecoration(
-                  hintText: "Koleksiyon adı (örn: Favorilerim)",
+                  hintText: "Koleksiyon adı",
                   focusedBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: Colors.deepOrange),
                   ),
@@ -172,6 +189,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  // --- UI WIDGETLARI ---
+
   Widget _buildCollectionGrid() {
     final user = _supabase.auth.currentUser;
     return FutureBuilder(
@@ -181,12 +200,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           .eq('user_id', user?.id ?? '')
           .order('isim', ascending: true),
       builder: (context, AsyncSnapshot snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(
             child: CircularProgressIndicator(color: Colors.deepOrange),
           );
-        }
-
         final collections = snapshot.data as List? ?? [];
 
         return GridView.builder(
@@ -235,17 +252,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             final String collectionId = collection['id'].toString();
 
             return InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CollectionDetailScreen(
-                      collectionId: collectionId,
-                      collectionName: collection['isim'],
-                    ),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CollectionDetailScreen(
+                    collectionId: collectionId,
+                    collectionName: collection['isim'],
                   ),
-                );
-              },
+                ),
+              ),
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -261,7 +276,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
                 child: Stack(
                   children: [
-                    // Ana Gövde
                     Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -290,7 +304,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ],
                       ),
                     ),
-                    // SAĞ ÜST: Gizlilik Ayarı
                     Positioned(
                       top: 0,
                       right: 0,
@@ -303,7 +316,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         onPressed: () => _togglePrivacy(collectionId, isPublic),
                       ),
                     ),
-                    // SOL ÜST: SİLME BUTONU
                     Positioned(
                       top: 0,
                       left: 0,
@@ -314,6 +326,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           color: Colors.redAccent,
                         ),
                         onPressed: () => _deleteCollection(collectionId),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.ios_share,
+                          size: 18,
+                          color: Colors.blueAccent,
+                        ),
+                        onPressed: () =>
+                            _shareCollection(collection['isim'], collectionId),
                       ),
                     ),
                   ],
@@ -328,13 +353,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading)
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(color: Colors.deepOrange),
         ),
       );
-    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -374,36 +398,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       body: DefaultTabController(
         length: 2,
         child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    _buildProfileHeader(),
-                    _buildBadgeSection(),
-                    const SizedBox(height: 10),
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _buildProfileHeader(),
+                  _buildBadgeSection(),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverAppBarDelegate(
+                const TabBar(
+                  labelColor: Colors.deepOrange,
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: Colors.deepOrange,
+                  tabs: [
+                    Tab(icon: Icon(Icons.grid_on), text: "Uğraklarım"),
+                    Tab(
+                      icon: Icon(Icons.bookmark_border),
+                      text: "Koleksiyonlarım",
+                    ),
                   ],
                 ),
               ),
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _SliverAppBarDelegate(
-                  TabBar(
-                    labelColor: Colors.deepOrange,
-                    unselectedLabelColor: Colors.grey,
-                    indicatorColor: Colors.deepOrange,
-                    tabs: const [
-                      Tab(icon: Icon(Icons.grid_on), text: "Uğraklarım"),
-                      Tab(
-                        icon: Icon(Icons.bookmark_border),
-                        text: "Koleksiyonlarım",
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ];
-          },
+            ),
+          ],
           body: TabBarView(
             children: [_buildPostGrid(_userPosts), _buildCollectionGrid()],
           ),
@@ -412,7 +434,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  // --- Yardımcı Profil Widgetları ---
   Widget _buildProfileHeader() {
     return Padding(
       padding: const EdgeInsets.all(20.0),
@@ -553,6 +574,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 }
 
+// --- TAB BAR DELEGATE ---
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
   final TabBar _tabBar;
@@ -565,10 +587,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     BuildContext context,
     double shrinkOffset,
     bool overlapsContent,
-  ) {
-    return Container(color: Colors.white, child: _tabBar);
-  }
-
+  ) => Container(color: Colors.white, child: _tabBar);
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
 }

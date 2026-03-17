@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
-import 'user_profile_screen.dart'; // Senin yeni yaptığın profil sayfası
+import 'user_profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -17,8 +17,8 @@ class _MainScreenState extends State<MainScreen> {
     const HomeScreen(), // Arama/Akış sayfan
     const Center(
       child: Text("Harita Yakında"),
-    ), // İleride buraya MapScreen gelecek
-    const UserProfileScreen(), // Senin efsane profil sayfan
+    ), 
+    const UserProfileScreen(), 
   ];
 
   @override
