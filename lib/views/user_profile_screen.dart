@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:ugrak_mekan_app/views/chat_list_screen.dart';
 import 'create_post_screen.dart';
 import 'collection_detail_screen.dart';
-import 'notifications_screen.dart'; // Bu dosyayı oluşturmuş olman gerekiyor
+import 'notifications_screen.dart';
+import 'complete_profile_screen.dart'; // Profil düzenleme sayfası için
 
 class UserProfileScreen extends StatefulWidget {
   final String? targetUserId;
@@ -20,6 +21,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Map<String, dynamic>? _profileData;
   List<dynamic> _userPosts = [];
+  List<dynamic> _userCollections = [];
   int _followerCount = 0;
   int _followingCount = 0;
 
@@ -29,42 +31,47 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _loadAllProfileData();
   }
 
-  // --- VERİ YÜKLEME ---
   Future<void> _loadAllProfileData() async {
-    final String userId = widget.targetUserId ?? _supabase.auth.currentUser!.id;
-    final String myId = _supabase.auth.currentUser!.id;
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return;
+
+    final String myId = currentUser.id;
+    final String userId = widget.targetUserId ?? myId;
 
     if (mounted) setState(() => _isLoading = true);
 
     try {
-      // Profil Bilgileri
-      final profileResponse = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
+      final results = await Future.wait([
+        _supabase.from('profiles').select().eq('id', userId).maybeSingle(),
+        _supabase
+            .from('cafe_postlar')
+            .select()
+            .eq('user_id', userId)
+            .order('paylasim_tarihi', ascending: false),
+        _supabase
+            .from('follows')
+            .select()
+            .eq('following_id', userId)
+            .eq('status', 'following'),
+        _supabase
+            .from('follows')
+            .select()
+            .eq('follower_id', userId)
+            .eq('status', 'following'),
+        (widget.targetUserId == null || widget.targetUserId == myId)
+            ? _supabase
+                  .from('koleksiyonlar')
+                  .select()
+                  .eq('user_id', userId)
+                  .order('isim')
+            : _supabase
+                  .from('koleksiyonlar')
+                  .select()
+                  .eq('user_id', userId)
+                  .eq('is_public', true)
+                  .order('isim'),
+      ]);
 
-      // Gönderiler
-      final postsResponse = await _supabase
-          .from('cafe_postlar')
-          .select()
-          .eq('user_id', userId)
-          .order('paylasim_tarihi', ascending: false);
-
-      // Takipçi ve Takip Sayıları (Sadece onaylanmış olanlar)
-      final followers = await _supabase
-          .from('follows')
-          .select()
-          .eq('following_id', userId)
-          .eq('status', 'following');
-
-      final following = await _supabase
-          .from('follows')
-          .select()
-          .eq('follower_id', userId)
-          .eq('status', 'following');
-
-      // Takip Durumu Kontrolü (Eğer başkasının profiliyse)
       if (userId != myId) {
         final followCheck = await _supabase
             .from('follows')
@@ -72,26 +79,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             .eq('follower_id', myId)
             .eq('following_id', userId)
             .maybeSingle();
-
         _followStatus = followCheck != null ? followCheck['status'] : "none";
       }
 
       if (mounted) {
         setState(() {
-          _profileData = profileResponse;
-          _userPosts = postsResponse;
-          _followerCount = followers.length;
-          _followingCount = following.length;
+          _profileData = results[0] as Map<String, dynamic>?;
+          _userPosts = results[1] as List<dynamic>;
+          _followerCount = (results[2] as List).length;
+          _followingCount = (results[3] as List).length;
+          _userCollections = results[4] as List<dynamic>;
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint("DEBUG: Profil Yükleme Hatası: $e");
+      debugPrint("Veri yükleme hatası: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // --- TAKİP ETME / ÇIKMA / İSTEK GÖNDERME ---
   Future<void> _handleFollowButton() async {
     final myId = _supabase.auth.currentUser!.id;
     final targetId = widget.targetUserId!;
@@ -99,27 +105,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     try {
       if (_followStatus == "following" || _followStatus == "pending") {
-        // Takipten çıkma veya bekleyen isteği iptal etme onayı
         bool confirm = await _showExitConfirmDialog();
         if (!confirm) return;
-
         await _supabase.from('follows').delete().match({
           'follower_id': myId,
           'following_id': targetId,
         });
-
-        // Varsa bildirimi de silebilirsin (isteğe bağlı)
       } else {
-        // Yeni Takip / İstek
         String newStatus = isPrivate ? "pending" : "following";
-
         await _supabase.from('follows').insert({
           'follower_id': myId,
           'following_id': targetId,
           'status': newStatus,
         });
-
-        // Bildirim tablosuna ekle
         await _supabase.from('notifications').insert({
           'sender_id': myId,
           'receiver_id': targetId,
@@ -128,402 +126,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
       _loadAllProfileData();
     } catch (e) {
-      debugPrint("Takip işlemi hatası: $e");
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("İşlem başarısız: $e")));
     }
-  }
-
-  Future<bool> _showExitConfirmDialog() async {
-    String title = _followStatus == "pending"
-        ? "İsteği Geri Çek"
-        : "Takipten Çık";
-    String content = _followStatus == "pending"
-        ? "Takip isteğini geri çekmek istediğine emin misin?"
-        : "Bu kullanıcıyı takipten çıkmak istediğine emin misin?";
-
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("Vazgeç"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(title, style: const TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  // --- KOLEKSİYON İŞLEMLERİ ---
-  Future<void> _shareCollection(
-    String collectionName,
-    String collectionId,
-  ) async {
-    final String shareLink =
-        "https://haticeeakgull.github.io/koleksiyon/$collectionId";
-    final String message =
-        "Uğrak'taki '$collectionName' koleksiyonuma göz at! 🏙️\n$shareLink";
-    await Share.share(message);
-  }
-
-  Future<void> _togglePrivacy(String collectionId, bool currentStatus) async {
-    try {
-      await _supabase
-          .from('koleksiyonlar')
-          .update({'is_public': !currentStatus})
-          .eq('id', collectionId);
-      _loadAllProfileData();
-    } catch (e) {
-      debugPrint("Gizlilik hatası: $e");
-    }
-  }
-
-  Future<void> _deleteCollection(String collectionId) async {
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Koleksiyonu Sil"),
-        content: const Text("Bu koleksiyonu silmek istediğinize emin misiniz?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Vazgeç"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Sil", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await _supabase.from('koleksiyonlar').delete().eq('id', collectionId);
-      _loadAllProfileData();
-    }
-  }
-
-  Future<void> _showCreateCollectionDialog() async {
-    final TextEditingController controller = TextEditingController();
-    bool isPublic = true;
-
-    return showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text("Yeni Koleksiyon"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(hintText: "Koleksiyon adı"),
-              ),
-              SwitchListTile(
-                title: const Text("Herkese Açık"),
-                value: isPublic,
-                activeColor: Colors.deepOrange,
-                onChanged: (val) => setDialogState(() => isPublic = val),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Vazgeç"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (controller.text.isNotEmpty) {
-                  await _supabase.from('koleksiyonlar').insert({
-                    'isim': controller.text.trim(),
-                    'user_id': _supabase.auth.currentUser!.id,
-                    'is_public': isPublic,
-                  });
-                  if (mounted) Navigator.pop(context);
-                  _loadAllProfileData();
-                }
-              },
-              child: const Text("Oluştur"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- UI WIDGETLARI ---
-  Widget _buildPrivateAccountMessage() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.lock_outline, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          const Text(
-            "Bu Hesap Gizli",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          const Text(
-            "İçerikleri görmek için takip etmelisin.",
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(String value, String label) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-      ],
-    );
-  }
-
-  Future<void> _showLogoutDialog() async {
-    return showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Çıkış Yap'),
-        content: const Text('Emin misiniz?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          TextButton(
-            onPressed: () async {
-              await _supabase.auth.signOut();
-              if (mounted) Navigator.pushReplacementNamed(context, '/login');
-            },
-            child: const Text('Çıkış', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostGrid(List<dynamic> posts) {
-    if (posts.isEmpty)
-      return const Center(child: Text("Henüz bir paylaşım yok."));
-    return GridView.builder(
-      padding: const EdgeInsets.all(2),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
-      ),
-      itemCount: posts.length,
-      itemBuilder: (context, index) =>
-          Image.network(posts[index]['foto_url'], fit: BoxFit.cover),
-    );
-  }
-
-  Widget _buildCollectionGrid() {
-    final String userId = widget.targetUserId ?? _supabase.auth.currentUser!.id;
-    final bool isMe =
-        widget.targetUserId == null ||
-        widget.targetUserId == _supabase.auth.currentUser!.id;
-
-    return FutureBuilder(
-      future: isMe
-          ? _supabase
-                .from('koleksiyonlar')
-                .select()
-                .eq('user_id', userId)
-                .order('isim', ascending: true)
-          : _supabase
-                .from('koleksiyonlar')
-                .select()
-                .eq('user_id', userId)
-                .eq('is_public', true)
-                .order('isim', ascending: true),
-      builder: (context, AsyncSnapshot snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
-          return const Center(child: CircularProgressIndicator());
-        final collections = snapshot.data as List? ?? [];
-
-        return GridView.builder(
-          padding: const EdgeInsets.all(10),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.1,
-          ),
-          itemCount: isMe ? collections.length + 1 : collections.length,
-          itemBuilder: (context, index) {
-            if (isMe && index == 0) {
-              return InkWell(
-                onTap: _showCreateCollectionDialog,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        size: 40,
-                        color: Colors.orange,
-                      ),
-                      Text(
-                        "Yeni Oluştur",
-                        style: TextStyle(
-                          color: Colors.orange,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-            final collection = collections[isMe ? index - 1 : index];
-            return InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CollectionDetailScreen(
-                    collectionId: collection['id'].toString(),
-                    collectionName: collection['isim'],
-                  ),
-                ),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 5,
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.folder_special,
-                            size: 45,
-                            color: Colors.deepOrange,
-                          ),
-                          Text(
-                            collection['isim'],
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (isMe)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: IconButton(
-                          icon: Icon(
-                            collection['is_public']
-                                ? Icons.public
-                                : Icons.lock_outline,
-                            size: 18,
-                          ),
-                          onPressed: () => _togglePrivacy(
-                            collection['id'].toString(),
-                            collection['is_public'],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading)
+    if (_isLoading) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(color: Colors.deepOrange),
         ),
       );
+    }
 
     final bool isMe =
         widget.targetUserId == null ||
-        widget.targetUserId == _supabase.auth.currentUser!.id;
+        widget.targetUserId == _supabase.auth.currentUser?.id;
     final bool isPrivate = _profileData?['is_private'] ?? false;
-    final bool showContent = isMe || !isPrivate || _followStatus == "following";
+    final bool canSeeContent =
+        isMe || !isPrivate || _followStatus == "following";
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(
-          _profileData?['username'] ?? "Profil",
-          style: const TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          if (isMe) ...[
-            IconButton(
-              icon: const Icon(
-                Icons.notifications_none_outlined,
-                color: Colors.black,
-                size: 28,
-              ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const NotificationsScreen(),
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreatePostScreen(),
-                  ),
-                );
-                _loadAllProfileData();
-              },
-              icon: const Icon(
-                Icons.add_box_outlined,
-                color: Colors.deepOrange,
-                size: 28,
-              ),
-            ),
-            IconButton(
-              onPressed: _showLogoutDialog,
-              icon: const Icon(Icons.logout, color: Colors.redAccent),
-            ),
-          ],
-        ],
-      ),
+      appBar: _buildAppBar(isMe),
       body: DefaultTabController(
         length: 2,
         child: NestedScrollView(
@@ -531,7 +160,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             SliverToBoxAdapter(
               child: Column(
                 children: [
-                  _buildProfileHeader(),
+                  _buildProfileHeader(isMe),
                   _buildBadgeSection(),
                   const SizedBox(height: 10),
                 ],
@@ -560,11 +189,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ],
           body: TabBarView(
             children: [
-              showContent
-                  ? _buildPostGrid(_userPosts)
-                  : _buildPrivateAccountMessage(),
-              showContent
-                  ? _buildCollectionGrid()
+              canSeeContent ? _buildPostGrid() : _buildPrivateAccountMessage(),
+              canSeeContent
+                  ? _buildCollectionGrid(isMe)
                   : _buildPrivateAccountMessage(),
             ],
           ),
@@ -573,26 +200,56 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildProfileHeader() {
-    final bool isMe =
-        widget.targetUserId == null ||
-        widget.targetUserId == _supabase.auth.currentUser!.id;
+  AppBar _buildAppBar(bool isMe) {
+    return AppBar(
+      title: Text(
+        _profileData?['username'] ?? "Profil",
+        style: const TextStyle(
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: Colors.white,
+      elevation: 0,
+      iconTheme: const IconThemeData(color: Colors.black),
+      actions: [
+        if (isMe) ...[
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ChatListScreen()),
+            ),
+            icon: const Icon(
+              Icons.near_me_outlined,
+              color: Colors.black,
+              size: 26,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none_outlined, size: 28),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              );
+              _loadAllProfileData();
+            },
+          ),
+          IconButton(
+            onPressed: _showLogoutDialog,
+            icon: const Icon(
+              Icons.logout,
+              color: Color.fromARGB(255, 10, 10, 10),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
-    // Buton Tasarımı Ayarları
-    String btnText = "Takip Et";
-    Color btnColor = Colors.deepOrange;
-    Color textColor = Colors.white;
-
-    if (_followStatus == "following") {
-      btnText = "Takipten Çık";
-      btnColor = Colors.grey[200]!;
-      textColor = Colors.black;
-    } else if (_followStatus == "pending") {
-      btnText = "İstek Gönderildi";
-      btnColor = Colors.grey[300]!;
-      textColor = Colors.black54;
-    }
-
+  Widget _buildProfileHeader(bool isMe) {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -624,35 +281,111 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
           const SizedBox(height: 15),
           Text(
-            _profileData?['full_name'] ?? "Kullanıcı",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            _profileData?['full_name'] ?? "Uğrak Kullanıcısı",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
+          const SizedBox(height: 4),
           Text(
-            _profileData?['bio'] ?? "Henüz bir bio eklenmemiş.",
+            _profileData?['bio'] ?? "Henüz bir açıklama eklenmedi.",
             style: const TextStyle(fontSize: 14),
           ),
           const SizedBox(height: 15),
-          SizedBox(
-            width: double.infinity,
-            child: isMe
-                ? OutlinedButton(
-                    onPressed: () {},
-                    child: const Text(
-                      "Profili Düzenle",
-                      style: TextStyle(color: Colors.black),
+
+          // DÜZELTİLEN BUTON ALANI
+          isMe
+              ? Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CompleteProfileScreen(),
+                          ),
+                        ),
+                        child: const Text(
+                          "Profili Düzenle",
+                          style: TextStyle(color: Colors.black),
+                        ),
+                      ),
                     ),
-                  )
-                : ElevatedButton(
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 1,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          side: const BorderSide(
+                            color: Color.fromARGB(255, 10, 10, 10),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CreatePostScreen(),
+                            ),
+                          );
+                          _loadAllProfileData();
+                        },
+                        child: const Icon(Icons.add, color: Colors.deepOrange),
+                      ),
+                    ),
+                  ],
+                )
+              : SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: btnColor,
+                      backgroundColor: _followStatus == "none"
+                          ? const Color.fromARGB(255, 4, 4, 4)
+                          : Colors.grey[200],
                       elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     onPressed: _handleFollowButton,
-                    child: Text(btnText, style: TextStyle(color: textColor)),
+                    child: Text(
+                      _followStatus == "none"
+                          ? "Takip Et"
+                          : (_followStatus == "pending"
+                                ? "İstek Gönderildi"
+                                : "Takipten Çık"),
+                      style: TextStyle(
+                        color: _followStatus == "none"
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
                   ),
-          ),
+                ),
         ],
       ),
+    );
+  }
+
+  // --- Diğer Yardımcı Widgetlar (Stat, Badge, Grid vb.) ---
+
+  Widget _buildStatColumn(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      ],
     );
   }
 
@@ -674,22 +407,282 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.only(left: 20),
             itemCount: 3,
-            itemBuilder: (context, index) => Container(
-              width: 60,
-              margin: const EdgeInsets.only(right: 15),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF3E0),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.workspace_premium,
-                color: Colors.orange,
-                size: 30,
-              ),
-            ),
+            itemBuilder: (context, index) {
+              // Farklı renklerde madalyalar
+              final colors = [Colors.orange, Colors.blueGrey, Colors.amber];
+              return Container(
+                width: 60,
+                margin: const EdgeInsets.only(right: 15),
+                decoration: BoxDecoration(
+                  color: colors[index].withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.workspace_premium,
+                  color: colors[index],
+                  size: 30,
+                ),
+              );
+            },
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPostGrid() {
+    if (_userPosts.isEmpty)
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text("Henüz bir paylaşım yok."),
+        ),
+      );
+    return GridView.builder(
+      padding: const EdgeInsets.all(2),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 2,
+        mainAxisSpacing: 2,
+      ),
+      itemCount: _userPosts.length,
+      itemBuilder: (context, index) =>
+          Image.network(_userPosts[index]['foto_url'], fit: BoxFit.cover),
+    );
+  }
+
+  Widget _buildCollectionGrid(bool isMe) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(10),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.1,
+      ),
+      itemCount: isMe ? _userCollections.length + 1 : _userCollections.length,
+      itemBuilder: (context, index) {
+        if (isMe && index == 0) return _buildCreateCollectionCard();
+        final collection = _userCollections[isMe ? index - 1 : index];
+        return _buildCollectionCard(collection, isMe);
+      },
+    );
+  }
+
+  Widget _buildCollectionCard(dynamic collection, bool isMe) {
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CollectionDetailScreen(
+            collectionId: collection['id'].toString(),
+            collectionName: collection['isim'],
+          ),
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.folder_special,
+                    size: 45,
+                    color: Colors.deepOrange,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    collection['isim'],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            if (isMe)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  icon: Icon(
+                    collection['is_public'] ? Icons.public : Icons.lock_outline,
+                    size: 18,
+                  ),
+                  onPressed: () => _togglePrivacy(
+                    collection['id'].toString(),
+                    collection['is_public'],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateCollectionCard() {
+    return InkWell(
+      onTap: _showCreateCollectionDialog,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_circle_outline,
+              size: 40,
+              color: Color.fromARGB(255, 7, 7, 7),
+            ),
+            Text(
+              "Yeni Oluştur",
+              style: TextStyle(
+                color: Color.fromARGB(255, 1, 1, 1),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Yardımcı Fonksiyonlar ---
+
+  Future<void> _togglePrivacy(String collectionId, bool currentStatus) async {
+    await _supabase
+        .from('koleksiyonlar')
+        .update({'is_public': !currentStatus})
+        .eq('id', collectionId);
+    _loadAllProfileData();
+  }
+
+  Future<void> _showCreateCollectionDialog() async {
+    final controller = TextEditingController();
+    bool isPublic = true;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Yeni Koleksiyon"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(hintText: "Koleksiyon adı"),
+              ),
+              SwitchListTile(
+                title: const Text("Herkese Açık"),
+                value: isPublic,
+                onChanged: (v) => setDialogState(() => isPublic = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Vazgeç"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await _supabase.from('koleksiyonlar').insert({
+                  'isim': controller.text,
+                  'user_id': _supabase.auth.currentUser!.id,
+                  'is_public': isPublic,
+                });
+                Navigator.pop(context);
+                _loadAllProfileData();
+              },
+              child: const Text("Oluştur"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _showExitConfirmDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              _followStatus == "pending" ? "İsteği Geri Çek" : "Takipten Çık",
+            ),
+            content: Text(
+              _followStatus == "pending"
+                  ? "İsteği geri çekmek istiyor musunuz?"
+                  : "Takipten çıkmak istiyor musunuz?",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Vazgeç"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  "Onayla",
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _showLogoutDialog() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Çıkış Yap'),
+        content: const Text('Emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _supabase.auth.signOut();
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+            child: const Text('Çıkış', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivateAccountMessage() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.lock_outline, size: 64, color: Colors.grey[400]),
+          const Text(
+            "Bu Hesap Gizli",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          const Text(
+            "İçerikleri görmek için takip etmelisin.",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
+      ),
     );
   }
 }
