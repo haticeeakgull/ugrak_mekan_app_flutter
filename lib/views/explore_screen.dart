@@ -21,8 +21,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   List<Map<String, dynamic>> _searchResults = [];
   List<dynamic> _kafeler = [];
+  List<dynamic> _tumOneriPostlari = [];
   List<Marker> _markers = [];
+
   bool _isMapLoading = true;
+  bool _showCafeCards = false;
+
   int _currentCafeIndex = 0;
 
   @override
@@ -31,10 +35,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _fetchKafeler();
   }
 
-  // 1. DÜZELTİLMİŞ FETCH SORGUSU: Join işlemi yapıyoruz
   Future<void> _fetchKafeler() async {
     try {
-      // ilce_isimli_kafeler'i alırken, ona bağlı cafe_postlar içindeki verileri de çekiyoruz
       final data = await supabase.from('ilce_isimli_kafeler').select('''
         *,
         cafe_postlar (
@@ -45,30 +47,51 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
       setState(() {
         _kafeler = data;
+
+        _tumOneriPostlari =
+            _kafeler
+                .expand((cafe) => (cafe['cafe_postlar'] as List? ?? []))
+                .toList()
+              ..shuffle();
+
         _updateMarkers();
+
         _isMapLoading = false;
       });
     } catch (e) {
-      debugPrint("Veri çekme hatası (Join): $e");
+      debugPrint("Veri çekme hatası: $e");
+
+      setState(() => _isMapLoading = false);
     }
   }
 
   void _updateMarkers() {
     _markers = _kafeler.asMap().entries.map((entry) {
       int i = entry.key;
+
       var cafe = entry.value;
+
       return Marker(
-        point: LatLng(cafe['latitude'], cafe['longitude']),
-        width: 80,
-        height: 45,
+        point: LatLng(cafe['latitude'] ?? 0.0, cafe['longitude'] ?? 0.0),
+
+        width: 100,
+        height: 50,
+
         child: GestureDetector(
           onTap: () {
-            _pageController.animateToPage(
-              i,
-              duration: const Duration(milliseconds: 500),
-              curve: Curves.easeInOut,
+            setState(() {
+              _showCafeCards = true;
+              _currentCafeIndex = i;
+            });
+
+            _pageController.jumpToPage(i);
+
+            _mapController.move(
+              LatLng(cafe['latitude'], cafe['longitude']),
+              15,
             );
           },
+
           child: _buildAirbnbMarker(
             cafe['kafe_adi'] ?? "",
             i == _currentCafeIndex,
@@ -81,15 +104,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildAirbnbMarker(String name, bool isSelected) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
+
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+
       decoration: BoxDecoration(
         color: isSelected ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade300, width: 1),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4),
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
       ),
+
       child: Center(
         child: Text(
           name,
@@ -115,7 +139,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   mapController: _mapController,
                   options: const MapOptions(
                     initialCenter: LatLng(39.9042, 32.8597),
-                    initialZoom: 14.0,
+                    initialZoom: 13,
                   ),
                   children: [
                     TileLayer(
@@ -123,89 +147,32 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
                       subdomains: const ['a', 'b', 'c', 'd'],
                     ),
+
                     MarkerLayer(markers: _markers),
                   ],
                 ),
 
-          // ARAMA BÖLÜMÜ
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                children: [
-                  Material(
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(30),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _searchUsers,
-                      decoration: const InputDecoration(
-                        hintText: "Arkadaşlarını keşfet...",
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: Colors.deepOrange,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 15),
-                      ),
-                    ),
-                  ),
-                  if (_searchController.text.isNotEmpty)
-                    Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.95),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: _searchResults.isEmpty
-                            ? const Center(child: Text("Kullanıcı bulunamadı."))
-                            : ListView.builder(
-                                itemCount: _searchResults.length,
-                                itemBuilder: (context, index) {
-                                  final user = _searchResults[index];
-                                  return ListTile(
-                                    title: Text(user['username'] ?? "İsimsiz"),
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => UserProfileScreen(
-                                          targetUserId: user['id'],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // 2. DÜZELTİLMİŞ ALT KARTLAR ALANI
-          if (_searchController.text.isEmpty && _kafeler.isNotEmpty)
+          if (_showCafeCards)
             Positioned(
-              bottom: 30,
+              bottom: 20,
               left: 0,
               right: 0,
               child: SizedBox(
-                height: 280,
+                height: 270,
                 child: PageView.builder(
                   controller: _pageController,
                   itemCount: _kafeler.length,
                   onPageChanged: (index) {
                     setState(() {
                       _currentCafeIndex = index;
-                      _updateMarkers();
                     });
+
                     _mapController.move(
                       LatLng(
                         _kafeler[index]['latitude'],
                         _kafeler[index]['longitude'],
                       ),
-                      15.0,
+                      15,
                     );
                   },
                   itemBuilder: (context, index) =>
@@ -213,97 +180,156 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 ),
               ),
             ),
+
+          /// ❌ KART KAPATMA BUTONU
+          if (_showCafeCards)
+            Positioned(
+              right: 20,
+              bottom: 310,
+              child: FloatingActionButton(
+                mini: true,
+                backgroundColor: Colors.white,
+                onPressed: () {
+                  setState(() {
+                    _showCafeCards = false;
+                  });
+                },
+                child: const Icon(Icons.close, color: Colors.black),
+              ),
+            ),
+
+          if (!_showCafeCards) _buildDiscoverySheet(),
+
+          _buildSearchOverlay(),
         ],
       ),
     );
   }
 
-  // 3. DÜZELTİLMİŞ KAFE KARTI: cafe_postlar tablosundan gelen verileri kullanır
-  Widget _buildCafeCard(dynamic cafeData) {
-    // cafe_postlar tablosundan gelen listeyi alıyoruz
-    final List<dynamic> postlar = cafeData['cafe_postlar'] ?? [];
+  Widget _buildDiscoverySheet() {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.12,
+      minChildSize: 0.12,
+      maxChildSize: 0.85,
 
-    // Sadece foto_url'leri ayıklıyoruz
-    final List<String> fotograflar = postlar
-        .where((p) => p['foto_url'] != null)
-        .map((p) => p['foto_url'].toString())
-        .toList();
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+          ),
+
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+
+              Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              const Text(
+                "Sana Özel Keşifler",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: _tumOneriPostlari.length,
+                  itemBuilder: (context, index) {
+                    final post = _tumOneriPostlari[index];
+
+                    return Column(
+                      children: [
+                        Image.network(
+                          post['foto_url'] ?? "",
+                          width: double.infinity,
+                          height: 280,
+                          fit: BoxFit.cover,
+                        ),
+
+                        ListTile(
+                          title: Text(
+                            post['baslik'] ?? "",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          trailing: const Icon(
+                            Icons.favorite_border,
+                            color: Colors.deepOrange,
+                          ),
+                        ),
+
+                        const Divider(),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCafeCard(dynamic cafeData) {
+    final List<dynamic> postlar = cafeData['cafe_postlar'] ?? [];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10),
-        ],
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12)],
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Üst Kısım: Post Fotoğrafları
           Expanded(
             flex: 3,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                  child: fotograflar.isNotEmpty
-                      ? PageView.builder(
-                          itemCount: fotograflar.length,
-                          itemBuilder: (context, i) {
-                            return Image.network(
-                              fotograflar[i],
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                    color: Colors.grey[100],
-                                    child: const Icon(Icons.broken_image),
-                                  ),
-                            );
-                          },
-                        )
-                      : Container(
-                          color: Colors.grey[200],
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            size: 50,
-                          ),
-                        ),
-                ),
-                if (fotograflar.length > 1)
-                  Positioned(
-                    bottom: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.layers,
-                        color: Colors.white,
-                        size: 14,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(22),
+              ),
+              child: postlar.isNotEmpty
+                  ? PageView.builder(
+                      itemCount: postlar.length,
+                      itemBuilder: (context, index) {
+                        return Image.network(
+                          postlar[index]['foto_url'],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        );
+                      },
+                    )
+                  : Container(
+                      color: Colors.orange[100],
+                      child: const Center(
+                        child: Icon(Icons.local_cafe, size: 60),
                       ),
                     ),
-                  ),
-              ],
             ),
           ),
 
-          // Alt Kısım: İsim ve Post Başlığı
           Expanded(
             flex: 2,
             child: InkWell(
               onTap: () {
                 final cafeModel = Cafe.fromJson(cafeData);
+
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -311,42 +337,39 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   builder: (context) => CafeDetailSheet(cafe: cafeModel),
                 );
               },
+
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
+
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      cafeData['kafe_adi'] ?? "Bilinmeyen Mekan",
+                      cafeData['kafe_adi'] ?? "",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontSize: 17,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
+
                     const SizedBox(height: 4),
-                    // Açıklama olarak ilk postun başlığını basıyoruz
+
                     Text(
                       postlar.isNotEmpty
-                          ? (postlar[0]['baslik'] ?? "Harika bir manzara!")
-                          : "Henüz paylaşım yok.",
+                          ? postlar[0]['baslik']
+                          : "Fotoğraf yok",
                       style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
+
                     const Spacer(),
-                    const Divider(height: 1),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Center(
-                        child: Text(
-                          "Detayları Gör",
-                          style: TextStyle(
-                            color: Colors.deepOrange,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
+
+                    const Center(
+                      child: Text(
+                        "Detayları Gör",
+                        style: TextStyle(
+                          color: Colors.deepOrange,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -356,6 +379,59 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchOverlay() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+
+        child: Column(
+          children: [
+            Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(30),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _searchUsers,
+                decoration: const InputDecoration(
+                  hintText: "Arkadaşlarını keşfet...",
+                  prefixIcon: Icon(Icons.search, color: Colors.deepOrange),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 15),
+                ),
+              ),
+            ),
+
+            if (_searchResults.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _searchResults.length,
+                  itemBuilder: (context, index) => ListTile(
+                    title: Text(_searchResults[index]['username'] ?? ""),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => UserProfileScreen(
+                          targetUserId: _searchResults[index]['id'],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -365,11 +441,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
       setState(() => _searchResults = []);
       return;
     }
+
     final results = await supabase
         .from('profiles')
         .select()
         .ilike('username', '%$query%')
-        .limit(10);
+        .limit(5);
+
     setState(() => _searchResults = List<Map<String, dynamic>>.from(results));
   }
 }
