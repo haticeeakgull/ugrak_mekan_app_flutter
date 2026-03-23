@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart'; // Paylaşım paketi eklendi
 import 'package:ugrak_mekan_app/views/chat_list_screen.dart';
 import 'create_post_screen.dart';
 import 'collection_detail_screen.dart';
 import 'notifications_screen.dart';
-import 'complete_profile_screen.dart'; // Profil düzenleme sayfası için
+import 'complete_profile_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String? targetUserId;
@@ -17,7 +18,7 @@ class UserProfileScreen extends StatefulWidget {
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
-  String _followStatus = "none"; // "none", "pending", "following"
+  String _followStatus = "none";
 
   Map<String, dynamic>? _profileData;
   List<dynamic> _userPosts = [];
@@ -96,6 +97,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       debugPrint("Veri yükleme hatası: $e");
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // --- PAYLAŞIM FONKSİYONU ---
+  Future<void> _shareCollection(
+    String collectionName,
+    String collectionId,
+  ) async {
+    final String shareLink =
+        "https://haticeeakgull.github.io/koleksiyon/$collectionId";
+    final String message =
+        "Uğrak'taki '$collectionName' koleksiyonuma göz at! 🏙️\n"
+        "Mekanları görmek için tıkla: $shareLink";
+
+    await Share.share(message);
   }
 
   Future<void> _handleFollowButton() async {
@@ -239,10 +254,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
           IconButton(
             onPressed: _showLogoutDialog,
-            icon: const Icon(
-              Icons.logout,
-              color: Color.fromARGB(255, 10, 10, 10),
-            ),
+            icon: const Icon(Icons.logout, color: Colors.black),
           ),
         ],
       ],
@@ -290,92 +302,90 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             style: const TextStyle(fontSize: 14),
           ),
           const SizedBox(height: 15),
-
-          // DÜZELTİLEN BUTON ALANI
-          isMe
-              ? Row(
-                  children: [
-                    Expanded(
-                      flex: 5,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.grey),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const CompleteProfileScreen(),
-                          ),
-                        ),
-                        child: const Text(
-                          "Profili Düzenle",
-                          style: TextStyle(color: Colors.black),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 1,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          side: const BorderSide(
-                            color: Color.fromARGB(255, 10, 10, 10),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        onPressed: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const CreatePostScreen(),
-                            ),
-                          );
-                          _loadAllProfileData();
-                        },
-                        child: const Icon(Icons.add, color: Colors.deepOrange),
-                      ),
-                    ),
-                  ],
-                )
-              : SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _followStatus == "none"
-                          ? const Color.fromARGB(255, 4, 4, 4)
-                          : Colors.grey[200],
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: _handleFollowButton,
-                    child: Text(
-                      _followStatus == "none"
-                          ? "Takip Et"
-                          : (_followStatus == "pending"
-                                ? "İstek Gönderildi"
-                                : "Takipten Çık"),
-                      style: TextStyle(
-                        color: _followStatus == "none"
-                            ? Colors.white
-                            : Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
+          isMe ? _buildMyProfileButtons() : _buildOtherProfileButton(),
         ],
       ),
     );
   }
 
-  // --- Diğer Yardımcı Widgetlar (Stat, Badge, Grid vb.) ---
+  Widget _buildMyProfileButtons() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 5,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.grey),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CompleteProfileScreen(),
+              ),
+            ),
+            child: const Text(
+              "Profili Düzenle",
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 1,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              side: const BorderSide(color: Colors.black),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreatePostScreen(),
+                ),
+              );
+              _loadAllProfileData();
+            },
+            child: const Icon(Icons.add, color: Colors.deepOrange),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtherProfileButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _followStatus == "none"
+              ? Colors.black
+              : Colors.grey[200],
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        onPressed: _handleFollowButton,
+        child: Text(
+          _followStatus == "none"
+              ? "Takip Et"
+              : (_followStatus == "pending"
+                    ? "İstek Gönderildi"
+                    : "Takipten Çık"),
+          style: TextStyle(
+            color: _followStatus == "none" ? Colors.white : Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildStatColumn(String value, String label) {
     return Column(
@@ -408,7 +418,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             padding: const EdgeInsets.only(left: 20),
             itemCount: 3,
             itemBuilder: (context, index) {
-              // Farklı renklerde madalyalar
               final colors = [Colors.orange, Colors.blueGrey, Colors.amber];
               return Container(
                 width: 60,
@@ -470,13 +479,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildCollectionCard(dynamic collection, bool isMe) {
+    final String collectionId = collection['id'].toString();
+    final String collectionName = collection['isim'];
+
     return InkWell(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => CollectionDetailScreen(
-            collectionId: collection['id'].toString(),
-            collectionName: collection['isim'],
+            collectionId: collectionId,
+            collectionName: collectionName,
           ),
         ),
       ),
@@ -501,13 +513,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    collection['isim'],
+                    collectionName,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ),
+            // Gizlilik İkonu (Sağ Üst)
             if (isMe)
               Positioned(
                 top: 0,
@@ -517,12 +530,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     collection['is_public'] ? Icons.public : Icons.lock_outline,
                     size: 18,
                   ),
-                  onPressed: () => _togglePrivacy(
-                    collection['id'].toString(),
-                    collection['is_public'],
-                  ),
+                  onPressed: () =>
+                      _togglePrivacy(collectionId, collection['is_public']),
                 ),
               ),
+            // PAYLAŞIM BUTONU (Sağ Alt) - Yeni Eklendi
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.ios_share,
+                  size: 18,
+                  color: Colors.blueAccent,
+                ),
+                onPressed: () => _shareCollection(collectionName, collectionId),
+              ),
+            ),
           ],
         ),
       ),
@@ -541,15 +565,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.add_circle_outline,
-              size: 40,
-              color: Color.fromARGB(255, 7, 7, 7),
-            ),
+            Icon(Icons.add_circle_outline, size: 40, color: Colors.black),
             Text(
               "Yeni Oluştur",
               style: TextStyle(
-                color: Color.fromARGB(255, 1, 1, 1),
+                color: Colors.black,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -558,8 +578,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ),
     );
   }
-
-  // --- Yardımcı Fonksiyonlar ---
 
   Future<void> _togglePrivacy(String collectionId, bool currentStatus) async {
     await _supabase
@@ -598,6 +616,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
+                if (controller.text.isEmpty) return;
                 await _supabase.from('koleksiyonlar').insert({
                   'isim': controller.text,
                   'user_id': _supabase.auth.currentUser!.id,
