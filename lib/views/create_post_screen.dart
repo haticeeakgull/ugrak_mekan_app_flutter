@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class CreatePostScreen extends StatefulWidget {
-  final String? cafeId; // Artık opsiyonel (?)
-  final String? initialCafeName; // Başlıkta göstermek için opsiyonel
+  final String? cafeId;
+  final String? initialCafeName;
 
   const CreatePostScreen({super.key, this.cafeId, this.initialCafeName});
 
@@ -16,19 +19,20 @@ class CreatePostScreen extends StatefulWidget {
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  File? _image;
+
+  // Çoklu fotoğraf listesi
+  List<File> _images = [];
   bool _isLoading = false;
 
   final _supabase = Supabase.instance.client;
   final _picker = ImagePicker();
 
-  // --- Kafe Seçimi İçin Gerekli Değişkenler ---
   String? _selectedCafeId;
   String? _selectedCafeName;
   List<Map<String, dynamic>> _allCafes = [];
   List<Map<String, dynamic>> _filteredCafes = [];
 
-  // --- Analiz Değerleri (Slider 1-5) ---
+  // Analiz Değerleri (Slider 1-5)
   double _kalabalik = 3;
   double _ses = 3;
   double _priz = 3;
@@ -56,11 +60,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     super.initState();
     _selectedCafeId = widget.cafeId;
     _selectedCafeName = widget.initialCafeName;
-
-    // Eğer profil sayfasından geliyorsa (cafeId yoksa) veritabanından kafeleri çek
-    if (_selectedCafeId == null) {
-      _fetchCafes();
-    }
+    _fetchCafes();
   }
 
   Future<void> _fetchCafes() async {
@@ -77,107 +77,75 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  void _showCafePicker() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (_, controller) => Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  "Hangi Mekandasın?",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 15),
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: "Mekan ara...",
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onChanged: (val) {
-                    setModalState(() {
-                      _filteredCafes = _allCafes.where((c) {
-                        final name =
-                            c['kafe_adi']?.toString().toLowerCase() ??
-                            ""; // null ise boş string yap
-                        return name.contains(val.toLowerCase());
-                      }).toList();
-                    });
-                  },
-                ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: ListView.builder(
-                    controller: controller,
-                    itemCount: _filteredCafes.length,
-                    itemBuilder: (context, index) {
-                      final cafe = _filteredCafes[index];
-                      return ListTile(
-                        leading: const Icon(Icons.coffee, color: Colors.orange),
-                        title: Text(cafe['kafe_adi'] ?? "İsimsiz Mekan"),
-                        onTap: () {
-                          setState(() {
-                            _selectedCafeId = cafe['id'].toString();
-                            _selectedCafeName = cafe['cafe_adi'];
-                          });
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+  // --- Yardımcı Metotlar ---
+  void _showSnackBar(String mesaj, {bool isError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mesaj),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
 
-  Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> pickedFiles = await _picker.pickMultiImage(
+        imageQuality: 70,
+      );
+
+      if (pickedFiles.isNotEmpty) {
+        final directory = await getApplicationDocumentsDirectory();
+
+        for (var xFile in pickedFiles) {
+          File? croppedFile = await _cropImage(File(xFile.path));
+
+          if (croppedFile != null) {
+            // Dosyayı cache'ten kalıcı döküman klasörüne kopyalıyoruz
+            final String fileName =
+                'post_${DateTime.now().microsecondsSinceEpoch}${p.extension(croppedFile.path)}';
+            final File permanentFile = await croppedFile.copy(
+              '${directory.path}/$fileName',
+            );
+
+            setState(() {
+              _images.add(permanentFile);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      _showSnackBar("Fotoğraf işlemede hata: $e");
+    }
+  }
+
+  Future<File?> _cropImage(File imageFile) async {
+    CroppedFile? croppedFile = await ImageCropper().cropImage(
+      sourcePath: imageFile.path,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Fotoğrafı Düzenle',
+          toolbarColor: Colors.deepOrange,
+          toolbarWidgetColor: Colors.white,
+          initAspectRatio: CropAspectRatioPreset.original,
+          lockAspectRatio: false,
+        ),
+        IOSUiSettings(title: 'Düzenle'),
+      ],
     );
-    if (pickedFile != null) setState(() => _image = File(pickedFile.path));
+    return croppedFile != null ? File(croppedFile.path) : null;
   }
 
   Future<void> _uploadPost() async {
+    FocusScope.of(context).unfocus();
+
     if (_selectedCafeId == null) {
       _showSnackBar("Lütfen bir mekan seçin!");
       return;
     }
-    if (_image == null ||
-        _titleController.text.isEmpty ||
-        _contentController.text.isEmpty) {
-      _showSnackBar("Lütfen fotoğraf, başlık ve deneyiminizi ekleyin!");
+    if (_images.isEmpty) {
+      _showSnackBar("Lütfen en az bir fotoğraf ekleyin!");
       return;
     }
 
@@ -185,12 +153,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) throw "Giriş yapmış kullanıcı bulunamadı!";
+      if (user == null) throw "Giriş yapılmış kullanıcı bulunamadı!";
 
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final path = 'cafe_photos/${user.id}/$fileName';
-      await _supabase.storage.from('posts').upload(path, _image!);
-      final imageUrl = _supabase.storage.from('posts').getPublicUrl(path);
+      List<String> imageUrls = [];
+
+      for (int i = 0; i < _images.length; i++) {
+        if (!await _images[i].exists()) continue;
+
+        final String extension = p.extension(_images[i].path);
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_$i$extension';
+        final path = 'cafe_photos/${user.id}/$fileName';
+
+        await _supabase.storage.from('posts').upload(path, _images[i]);
+        final url = _supabase.storage.from('posts').getPublicUrl(path);
+        imageUrls.add(url);
+      }
 
       final Map<String, dynamic> degerlendirme = {
         "kalabalik": _kalabalik.toInt(),
@@ -207,7 +185,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'user_id': user.id,
         'baslik': _titleController.text.trim(),
         'icerik': _contentController.text.trim(),
-        'foto_url': imageUrl,
+        'foto_url': imageUrls.isNotEmpty ? imageUrls.first : null,
+        'foto_listesi': imageUrls,
         'degerlendirme': degerlendirme,
         'paylasim_tarihi': DateTime.now().toIso8601String(),
       });
@@ -217,26 +196,77 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
+      debugPrint("YÜKLEME HATASI: $e");
       _showSnackBar("Bir hata oluştu: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showSnackBar(String message, {bool isError = true}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
+  // --- Widget Build Parçaları ---
+  Widget _buildPhotoPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle("Fotoğraflar", Icons.photo_library_outlined),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 120,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _images.length + 1,
+            itemBuilder: (context, index) {
+              if (index == _images.length) {
+                return GestureDetector(
+                  onTap: _pickImages,
+                  child: Container(
+                    width: 100,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                    ),
+                    child: const Icon(
+                      Icons.add_a_photo,
+                      color: Colors.orange,
+                      size: 30,
+                    ),
+                  ),
+                );
+              }
+              return Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    margin: const EdgeInsets.only(right: 12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: Image.file(_images[index], fit: BoxFit.cover),
+                    ),
+                  ),
+                  Positioned(
+                    right: 15,
+                    top: 5,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _images.removeAt(index)),
+                      child: const CircleAvatar(
+                        radius: 10,
+                        backgroundColor: Colors.red,
+                        child: Icon(Icons.close, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  // --- Widget Parçaları ---
-
   Widget _buildCafeSelector() {
-    if (widget.cafeId != null) return const SizedBox.shrink();
-
     return GestureDetector(
       onTap: _showCafePicker,
       child: Container(
@@ -269,40 +299,75 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  Widget _buildPhotoPicker() {
-    return GestureDetector(
-      onTap: _pickImage,
-      child: Container(
-        width: double.infinity,
-        height: 220,
-        decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.orange.withOpacity(0.2)),
-        ),
-        child: _image == null
-            ? const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.camera_alt_outlined,
-                    size: 45,
-                    color: Colors.orange,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    "Mekandan bir kare seç",
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w500,
+  void _showCafePicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          builder: (_, controller) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Text(
+                  "Hangi Mekandasın?",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: "Mekan ara...",
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-                ],
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: Image.file(_image!, fit: BoxFit.cover),
-              ),
+                  onChanged: (val) {
+                    setModalState(() {
+                      _filteredCafes = _allCafes
+                          .where(
+                            (c) => c['kafe_adi']
+                                .toString()
+                                .toLowerCase()
+                                .contains(val.toLowerCase()),
+                          )
+                          .toList();
+                    });
+                  },
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: controller,
+                    itemCount: _filteredCafes.length,
+                    itemBuilder: (context, index) {
+                      final cafe = _filteredCafes[index];
+                      return ListTile(
+                        leading: const Icon(Icons.coffee, color: Colors.orange),
+                        title: Text(cafe['kafe_adi'] ?? "İsimsiz Mekan"),
+                        onTap: () {
+                          setState(() {
+                            _selectedCafeId = cafe['id'].toString();
+                            _selectedCafeName = cafe['kafe_adi'];
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -314,7 +379,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           controller: _titleController,
           decoration: InputDecoration(
             labelText: 'Başlık',
-            hintText: 'Örn: Kadıköy\'ün en sakin köşesi',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             prefixIcon: const Icon(Icons.title),
           ),
@@ -325,7 +389,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           maxLines: 3,
           decoration: InputDecoration(
             labelText: 'Deneyimin',
-            hintText: 'Burayı neden sevdin? Kahvesi nasıl?',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             prefixIcon: const Icon(Icons.notes),
           ),
@@ -366,7 +429,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           max: 5,
           divisions: 4,
           activeColor: Colors.deepOrange,
-          inactiveColor: Colors.orange.withOpacity(0.2),
           onChanged: onChanged,
         ),
       ],
@@ -407,11 +469,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -428,7 +486,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          elevation: 2,
         ),
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.white)

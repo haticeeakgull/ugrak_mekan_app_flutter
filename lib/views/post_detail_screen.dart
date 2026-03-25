@@ -42,7 +42,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         itemBuilder: (context, index) {
           final post = widget.allPosts[index];
           return _HorizontalPostContainer(
-            key: ValueKey(post['id']), // Her post için benzersiz key
+            key: ValueKey(post['id']),
             post: post,
             supabase: supabase,
             onDelete: () => setState(() {
@@ -74,17 +74,17 @@ class _HorizontalPostContainer extends StatefulWidget {
 
 class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
   late PageController _horizontalController;
+  int _currentPage = 0;
 
   bool isLiked = false;
   int likeCount = 0;
   bool isSyncing = false;
-  bool isLoadingLikes = true; // İlk açılışta sayının yüklenmesi için
+  bool isLoadingLikes = true;
 
   @override
   void initState() {
     super.initState();
     _horizontalController = PageController();
-    // İlk açılışta hem beğeni sayısını hem de kullanıcının beğenip beğenmediğini çekiyoruz
     _loadLikeData();
   }
 
@@ -94,23 +94,19 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     super.dispose();
   }
 
-  // --- YENİ: VERİTABANINDAN CANLI SAYI VE DURUM ÇEKME ---
+  // Beğeni verilerini çekme işlemi (Mevcut mantığın korundu)
   Future<void> _loadLikeData() async {
     final userId = widget.supabase.auth.currentUser?.id;
     final postId = widget.post['id'];
 
     try {
-      // 1. Toplam beğeni sayısını say (DÜZELTİLMİŞ KISIM)
-      // count: CountOption.exact parametresini select içine alıyoruz
       final response = await widget.supabase
           .from('post_likes')
           .select('*')
-          .eq('post_id', postId)
-          .count(
-            CountOption.exact,
-          ); // Count artık select dışında veya farklı bir yapıda olabilir
+          .eq('post_id', postId);
 
-      // 2. Kullanıcı beğenmiş mi kontrol et
+      final int count = (response as List).length;
+
       bool userLiked = false;
       if (userId != null) {
         final likeRes = await widget.supabase
@@ -124,28 +120,22 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
 
       if (mounted) {
         setState(() {
-          // response.count doğrudan toplam sayıyı verir
-          likeCount = response.count;
+          likeCount = count;
           isLiked = userLiked;
           isLoadingLikes = false;
         });
       }
     } catch (e) {
-      debugPrint("Beğeni verisi yüklenirken hata: $e");
       if (mounted) setState(() => isLoadingLikes = false);
     }
   }
 
-  // --- GÜNCELLENMİŞ BEĞENİ FONKSİYONU (SÜTUNSUZ) ---
   Future<void> _handleLike() async {
     if (isSyncing) return;
-
     final userId = widget.supabase.auth.currentUser?.id;
     if (userId == null) return;
 
     setState(() => isSyncing = true);
-
-    // Optimistik Güncelleme (Hız hissi için)
     final bool originalIsLiked = isLiked;
     final int originalLikeCount = likeCount;
 
@@ -156,32 +146,23 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
 
     try {
       if (originalIsLiked) {
-        // Beğeniyi kaldır
-        await widget.supabase
-            .from('post_likes')
-            .delete()
-            .eq('post_id', widget.post['id'])
-            .eq('user_id', userId);
+        await widget.supabase.from('post_likes').delete().match({
+          'post_id': widget.post['id'],
+          'user_id': userId,
+        });
       } else {
-        // Beğeni ekle
         await widget.supabase.from('post_likes').upsert({
           'post_id': widget.post['id'],
           'user_id': userId,
-        }, onConflict: 'user_id, post_id');
+        });
       }
-      // NOT: Burada 'cafe_postlar' tablosuna update atmıyoruz, sütun yok çünkü!
     } catch (e) {
-      // Hata olursa eski haline döndür
       if (mounted) {
         setState(() {
           isLiked = originalIsLiked;
           likeCount = originalLikeCount;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Bağlantı hatası.")));
       }
-      debugPrint("Beğeni işlemi hatası: $e");
     } finally {
       if (mounted) setState(() => isSyncing = false);
     }
@@ -194,6 +175,13 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     final String kullaniciAdi =
         widget.post['profiles']?['username'] ?? 'Anonim';
 
+    // Çoklu fotoğraf desteği için liste kontrolü
+    // Veritabanında 'foto_urls' adında bir List<String> olduğunu varsayıyorum.
+    // Yoksa mevcut tekil 'foto_url'i listeye çeviriyoruz.
+    final List<dynamic> imageList =
+        widget.post['foto_listesi'] ??
+        (widget.post['foto_url'] != null ? [widget.post['foto_url']] : []);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 45, 12, 12),
       child: ClipRRect(
@@ -202,14 +190,59 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           color: Colors.white,
           child: Stack(
             children: [
-              PageView(
+              PageView.builder(
                 controller: _horizontalController,
                 scrollDirection: Axis.horizontal,
-                children: [
-                  _buildMainPage(context, kullaniciAdi),
-                  _buildDetailsPage(context, ratings, vibeler, kullaniciAdi),
-                ],
+                onPageChanged: (int page) {
+                  setState(() => _currentPage = page);
+                },
+                // Sayfa sayısı: Fotoğraf sayısı + 1 (Detay sayfası)
+                itemCount: imageList.length + 1,
+                itemBuilder: (context, index) {
+                  if (index < imageList.length) {
+                    // Fotoğraflar Sayfası
+                    return _buildImagePage(
+                      context,
+                      imageList[index],
+                      index == 0,
+                    );
+                  } else {
+                    // En sondaki Detay Sayfası
+                    return _buildDetailsPage(
+                      context,
+                      ratings,
+                      vibeler,
+                      kullaniciAdi,
+                    );
+                  }
+                },
               ),
+
+              // Üstteki Fotoğraf İndikatörleri (Instagram stili)
+              if (imageList.length > 1)
+                Positioned(
+                  top: 15,
+                  left: 20,
+                  right: 20,
+                  child: Row(
+                    children: List.generate(
+                      imageList.length + 1,
+                      (index) => Expanded(
+                        child: Container(
+                          height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: _currentPage == index
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -223,16 +256,18 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     );
   }
 
-  // --- SAYFA TASARIMLARI (DEĞİŞMEDİ) ---
-
-  Widget _buildMainPage(BuildContext context, String kullaniciAdi) {
+  // Fotoğraf Sayfası Tasarımı
+  Widget _buildImagePage(
+    BuildContext context,
+    String imageUrl,
+    bool isFirstPage,
+  ) {
     return GestureDetector(
       onDoubleTap: _handleLike,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (widget.post['foto_url'] != null)
-            Image.network(widget.post['foto_url'], fit: BoxFit.cover),
+          Image.network(imageUrl, fit: BoxFit.cover),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -241,42 +276,47 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                 colors: [
                   Colors.black.withOpacity(0.2),
                   Colors.transparent,
-                  Colors.black.withOpacity(0.8),
+                  Colors.black.withOpacity(0.7),
                 ],
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.post['baslik'] ?? 'Başlıksız',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+          if (isFirstPage) // Başlık sadece ilk fotoğrafta görünsün
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.post['baslik'] ?? 'Başlıksız',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                const Row(
-                  children: [
-                    Icon(Icons.swipe_left, color: Colors.white70, size: 20),
-                    SizedBox(width: 8),
-                    Text("Detaylar", style: TextStyle(color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 80),
-              ],
+                  const SizedBox(height: 10),
+                  const Row(
+                    children: [
+                      Icon(Icons.swipe_left, color: Colors.white70, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        "Kaydırarak gez",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 80),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
+  // Mekan Karnesi ve Detaylar Sayfası
   Widget _buildDetailsPage(
     BuildContext context,
     Map<String, dynamic> ratings,
@@ -286,27 +326,18 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     return Container(
       color: Colors.white,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 30, 20, 120),
+        padding: const EdgeInsets.fromLTRB(20, 40, 20, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
             Row(
               children: [
                 CircleAvatar(
                   backgroundColor: Colors.deepOrange.shade50,
                   child: Text(
-                    kullaniciAdi[0].toUpperCase(),
+                    kullaniciAdi.isNotEmpty
+                        ? kullaniciAdi[0].toUpperCase()
+                        : 'A',
                     style: const TextStyle(color: Colors.deepOrange),
                   ),
                 ),
@@ -320,7 +351,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                 ),
               ],
             ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 20),
             Text(
               widget.post['icerik'] ?? '',
               style: const TextStyle(
@@ -329,9 +360,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                 color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 35),
-            const Divider(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
             const Text(
               "Mekan Karnesi",
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
@@ -360,6 +389,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     );
   }
 
+  // --- Alt Bar ve Rating Widgetları (Mevcut kodların aynısı) ---
   Widget _buildBottomBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -373,9 +403,6 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
-          const SizedBox(width: 8),
-
-          // BEĞENİ BUTONU (YÜKLENME DURUMLU)
           InkWell(
             onTap: _handleLike,
             borderRadius: BorderRadius.circular(20),
@@ -412,7 +439,6 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
               ),
             ),
           ),
-
           const Spacer(),
           if (widget.post['kullanici_id'] ==
               widget.supabase.auth.currentUser?.id)
@@ -424,8 +450,6 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
       ),
     );
   }
-
-  // --- YARDIMCI WIDGETLAR ---
 
   Widget _buildRatingCard(Map<String, dynamic> ratings) {
     return Container(

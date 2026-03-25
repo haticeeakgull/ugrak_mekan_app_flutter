@@ -65,14 +65,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleDeepLink(Uri uri) {
-    // Linkin içinde 'koleksiyon' kelimesi geçiyor mu bakıyoruz
-    if (uri.pathSegments.contains('koleksiyon')) {
-      // Linkin sonundaki ID'yi alıyoruz (Örn: 123)
-      final String collectionId = uri.pathSegments.last;
+    // queryParameters üzerinden kontrol et
+    if (uri.queryParameters.containsKey('koleksiyonId')) {
+      final String? collectionId = uri.queryParameters['koleksiyonId'];
 
-      if (mounted) {
-        // BURASI ÇOK ÖNEMLİ: Detay sayfasına yönlendiriyoruz
-        // Not: 'CollectionDetailScreen' ismini kendi sayfanla değiştir
+      if (collectionId != null && mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Navigator.push(
             context,
@@ -84,7 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         });
-        print("BAŞARI: Koleksiyon detayına gidiliyor ID: $collectionId");
       }
     }
   }
