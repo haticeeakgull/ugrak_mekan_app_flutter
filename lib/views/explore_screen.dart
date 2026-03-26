@@ -51,29 +51,41 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Future<void> _fetchKafeler() async {
     try {
+      // 1. Query'yi güncelledik: Postun bağlı olduğu kafe bilgilerini de çekiyoruz
       final data = await supabase.from('ilce_isimli_kafeler').select('''
         *,
         cafe_postlar (
           *,
-          profiles (username)
+          profiles (username),
+          ilce_isimli_kafeler (kafe_adi) 
         )
       ''');
 
       if (mounted) {
         setState(() {
           _kafeler = data;
-          // expand sonucunu List<Map<String, dynamic>> tipine dönüştürüyoruz
-          _tumOneriPostlari =
-              _kafeler
-                  .expand((cafe) => (cafe['cafe_postlar'] as List? ?? []))
-                  .map((post) => Map<String, dynamic>.from(post))
-                  .toList()
-                ..shuffle();
+
+          // 2. Postları ayrıştırırken kafe bilgilerini içine enjekte ediyoruz
+          _tumOneriPostlari = _kafeler.expand((cafe) {
+            final posts = cafe['cafe_postlar'] as List? ?? [];
+            return posts.map((post) {
+              final postMap = Map<String, dynamic>.from(post);
+
+              // Eğer postun içinde kafe bilgisi yoksa, üst klastan (cafe) gelen bilgiyi ekle
+              // Bu, PostDetailScreen'deki "Bilinmeyen Mekan"ı çözer.
+              if (postMap['ilce_isimli_kafeler'] == null) {
+                postMap['ilce_isimli_kafeler'] = {'kafe_adi': cafe['kafe_adi']};
+              }
+              return postMap;
+            });
+          }).toList()..shuffle();
+
           _updateMarkers();
           _isMapLoading = false;
         });
       }
     } catch (e) {
+      debugPrint("Hata: $e");
       if (mounted) setState(() => _isMapLoading = false);
     }
   }
@@ -390,17 +402,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   ),
                   const SizedBox(height: 15),
                   GestureDetector(
-                    onTap: () {
-                      Navigator.push(
+                    onTap: () async {
+                      // Sayfaya git ve dönmesini bekle
+                      await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => PostDetailScreen(
                             allPosts: _tumOneriPostlari,
-                            initialIndex:
-                                index, // Buradaki index artık ListView'dan geliyor
+                            initialIndex: index,
                           ),
                         ),
                       );
+                      // Sayfadan geri dönüldüğünde (düzenleme yapılmış olabilir) listeyi tekrar çek
+                      _fetchKafeler();
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(

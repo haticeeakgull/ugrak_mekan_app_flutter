@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ugrak_mekan_app/views/create_post_screen.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final List<Map<String, dynamic>> allPosts;
@@ -45,9 +46,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             key: ValueKey(post['id']),
             post: post,
             supabase: supabase,
-            onDelete: () => setState(() {
-              widget.allPosts.removeAt(index);
-            }),
+            onDelete: () {
+              setState(() {
+                widget.allPosts.removeAt(index);
+              });
+            },
           );
         },
       ),
@@ -75,11 +78,9 @@ class _HorizontalPostContainer extends StatefulWidget {
 class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
   late PageController _horizontalController;
   int _currentPage = 0;
-
   bool isLiked = false;
   int likeCount = 0;
   bool isSyncing = false;
-  bool isLoadingLikes = true;
 
   @override
   void initState() {
@@ -94,11 +95,9 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     super.dispose();
   }
 
-  // Beğeni verilerini çekme işlemi (Mevcut mantığın korundu)
   Future<void> _loadLikeData() async {
     final userId = widget.supabase.auth.currentUser?.id;
     final postId = widget.post['id'];
-
     try {
       final response = await widget.supabase
           .from('post_likes')
@@ -106,7 +105,6 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           .eq('post_id', postId);
 
       final int count = (response as List).length;
-
       bool userLiked = false;
       if (userId != null) {
         final likeRes = await widget.supabase
@@ -117,16 +115,14 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
             .maybeSingle();
         userLiked = likeRes != null;
       }
-
       if (mounted) {
         setState(() {
           likeCount = count;
           isLiked = userLiked;
-          isLoadingLikes = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => isLoadingLikes = false);
+      debugPrint("Like data error: $e");
     }
   }
 
@@ -170,14 +166,6 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, dynamic> ratings = widget.post['degerlendirme'] ?? {};
-    final List<dynamic> vibeler = ratings['secilen_vibeler'] ?? [];
-    final String kullaniciAdi =
-        widget.post['profiles']?['username'] ?? 'Anonim';
-
-    // Çoklu fotoğraf desteği için liste kontrolü
-    // Veritabanında 'foto_urls' adında bir List<String> olduğunu varsayıyorum.
-    // Yoksa mevcut tekil 'foto_url'i listeye çeviriyoruz.
     final List<dynamic> imageList =
         widget.post['foto_listesi'] ??
         (widget.post['foto_url'] != null ? [widget.post['foto_url']] : []);
@@ -192,57 +180,38 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
             children: [
               PageView.builder(
                 controller: _horizontalController,
-                scrollDirection: Axis.horizontal,
-                onPageChanged: (int page) {
-                  setState(() => _currentPage = page);
-                },
-                // Sayfa sayısı: Fotoğraf sayısı + 1 (Detay sayfası)
                 itemCount: imageList.length + 1,
+                onPageChanged: (page) => setState(() => _currentPage = page),
                 itemBuilder: (context, index) {
                   if (index < imageList.length) {
-                    // Fotoğraflar Sayfası
-                    return _buildImagePage(
-                      context,
-                      imageList[index],
-                      index == 0,
-                    );
+                    return _buildImagePage(imageList[index], index == 0);
                   } else {
-                    // En sondaki Detay Sayfası
-                    return _buildDetailsPage(
-                      context,
-                      ratings,
-                      vibeler,
-                      kullaniciAdi,
-                    );
+                    return _buildDetailsPage();
                   }
                 },
               ),
-
-              // Üstteki Fotoğraf İndikatörleri (Instagram stili)
-              if (imageList.length > 1)
-                Positioned(
-                  top: 15,
-                  left: 20,
-                  right: 20,
-                  child: Row(
-                    children: List.generate(
-                      imageList.length + 1,
-                      (index) => Expanded(
-                        child: Container(
-                          height: 3,
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: _currentPage == index
-                                ? Colors.white
-                                : Colors.white.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+              Positioned(
+                top: 20,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    imageList.length + 1,
+                    (index) => Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _currentPage == index
+                            ? Colors.deepOrange
+                            : Colors.grey.withOpacity(0.5),
                       ),
                     ),
                   ),
                 ),
-
+              ),
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -256,210 +225,121 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     );
   }
 
-  // Fotoğraf Sayfası Tasarımı
-  Widget _buildImagePage(
-    BuildContext context,
-    String imageUrl,
-    bool isFirstPage,
-  ) {
-    return GestureDetector(
-      onDoubleTap: _handleLike,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(imageUrl, fit: BoxFit.cover),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(0.2),
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.7),
-                ],
-              ),
+  Widget _buildImagePage(String url, bool isFirst) {
+    // Kafe adı için güvenli çekim
+    final String cafeName =
+        widget.post['ilce_isimli_kafeler']?['kafe_adi'] ??
+        widget.post['kafe_adi'] ??
+        'Bilinmeyen Mekan';
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.network(url, fit: BoxFit.cover),
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+              stops: const [0.6, 1.0],
             ),
           ),
-          if (isFirstPage) // Başlık sadece ilk fotoğrafta görünsün
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.post['baslik'] ?? 'Başlıksız',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Row(
-                    children: [
-                      Icon(Icons.swipe_left, color: Colors.white70, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        "Kaydırarak gez",
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 80),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // Mekan Karnesi ve Detaylar Sayfası
-  Widget _buildDetailsPage(
-    BuildContext context,
-    Map<String, dynamic> ratings,
-    List<dynamic> vibeler,
-    String kullaniciAdi,
-  ) {
-    return Container(
-      color: Colors.white,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 40, 20, 120),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        ),
+        if (isFirst)
+          Positioned(
+            bottom: 80,
+            left: 20,
+            right: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.deepOrange.shade50,
-                  child: Text(
-                    kullaniciAdi.isNotEmpty
-                        ? kullaniciAdi[0].toUpperCase()
-                        : 'A',
-                    style: const TextStyle(color: Colors.deepOrange),
+                Text(
+                  widget.post['baslik'] ?? '',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  kullaniciAdi,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      color: Colors.white70,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      cafeName,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Text(
-              widget.post['icerik'] ?? '',
-              style: const TextStyle(
-                fontSize: 16,
-                height: 1.5,
-                color: Colors.black87,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDetailsPage() {
+    final Map<String, dynamic> ratings = widget.post['degerlendirme'] ?? {};
+    // Vibe etiketlerini hem degerlendirme içinde hem de ana seviyede ara
+    final List<dynamic> vibes =
+        ratings['secilen_vibeler'] ?? widget.post['secilen_vibeler'] ?? [];
+    final String user = widget.post['profiles']?['username'] ?? 'Anonim';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 30),
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.deepOrange.shade100,
+                child: Text(
+                  user.isNotEmpty ? user[0].toUpperCase() : "?",
+                  style: const TextStyle(color: Colors.deepOrange),
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
-            const Text(
-              "Mekan Karnesi",
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 15),
-            _buildRatingCard(ratings),
-            if (vibeler.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: vibeler
-                    .map(
-                      (v) => Chip(
-                        label: Text("#$v"),
-                        backgroundColor: Colors.grey.shade100,
-                        side: BorderSide.none,
-                      ),
-                    )
-                    .toList(),
+              const SizedBox(width: 12),
+              Text(
+                user,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- Alt Bar ve Rating Widgetları (Mevcut kodların aynısı) ---
-  Widget _buildBottomBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-            onPressed: () => Navigator.pop(context),
           ),
-          InkWell(
-            onTap: _handleLike,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8.0,
-                vertical: 4.0,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isLiked ? Icons.favorite : Icons.favorite_border,
-                    size: 28,
-                    color: isLiked ? Colors.red : Colors.black87,
-                  ),
-                  const SizedBox(width: 6),
-                  isLoadingLikes
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.grey,
-                          ),
-                        )
-                      : Text(
-                          "$likeCount",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                ],
-              ),
+          const SizedBox(height: 20),
+          const Text(
+            "Deneyimim",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Colors.grey,
             ),
           ),
-          const Spacer(),
-          if (widget.post['kullanici_id'] ==
-              widget.supabase.auth.currentUser?.id)
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              onPressed: () => _showDeleteDialog(context, widget.post['id']),
-            ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 8),
+          Text(
+            widget.post['icerik'] ?? 'Yorum belirtilmemiş.',
+            style: const TextStyle(fontSize: 15, height: 1.5),
+          ),
 
-  Widget _buildRatingCard(Map<String, dynamic> ratings) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
+          const Divider(height: 40),
+
+          const Text(
+            "Mekan Karnesi",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          const SizedBox(height: 20),
+
+          // Tüm özelliklerin listesi
           _buildRatingItem(
             Icons.wifi,
             "İnternet",
@@ -474,22 +354,67 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           ),
           _buildRatingItem(
             Icons.volume_up,
-            "Ses",
+            "Ses Seviyesi",
             (ratings['ses'] ?? 0).toDouble(),
             Colors.orange,
           ),
           _buildRatingItem(
-            Icons.work_outline,
-            "Çalışma",
-            (ratings['calisma'] ?? 0).toDouble(),
+            Icons.groups,
+            "Kalabalık",
+            (ratings['kalabalik'] ?? 0).toDouble(),
             Colors.purple,
           ),
           _buildRatingItem(
-            Icons.people_outline,
-            "Doluluk",
-            (ratings['Kalabalık'] ?? 0).toDouble(),
-            Colors.red,
+            Icons.laptop,
+            "Çalışma Uygunluğu",
+            (ratings['calisma'] ?? 0).toDouble(),
+            Colors.teal,
           ),
+          _buildRatingItem(
+            Icons.music_note,
+            "Müzik",
+            (ratings['muzik'] ?? 0).toDouble(),
+            Colors.pink,
+          ),
+
+          const SizedBox(height: 30),
+          if (vibes.isNotEmpty) ...[
+            const Text(
+              "Vibe Etiketleri",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: vibes
+                  .map(
+                    (v) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.deepOrange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.deepOrange.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        v.toString(),
+                        style: const TextStyle(
+                          color: Colors.deepOrange,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 100),
         ],
       ),
     );
@@ -502,39 +427,112 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     Color color,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: Colors.grey),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Icon(icon, size: 18, color: Colors.grey.shade700),
+              const SizedBox(width: 10),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
               const Spacer(),
               Text(
                 "${rating.toInt()}/5",
-                style: TextStyle(
-                  fontSize: 13,
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: color, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          LinearProgressIndicator(
-            value: rating / 5,
-            backgroundColor: color.withOpacity(0.1),
-            color: color,
-            minHeight: 3,
+          const SizedBox(height: 8),
+          ClipRRect(
             borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: rating / 5,
+              minHeight: 8,
+              color: color,
+              backgroundColor: color.withOpacity(0.1),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context) {
+    final currentUserId = widget.supabase.auth.currentUser?.id;
+    final bool isMyPost = currentUserId == widget.post['user_id'];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+            onPressed: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _handleLike,
+            child: Row(
+              children: [
+                Icon(
+                  isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: isLiked ? Colors.red : Colors.black87,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "$likeCount",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          if (isMyPost) ...[
+            IconButton(
+              icon: const Icon(
+                Icons.edit_note_rounded,
+                color: Colors.blue,
+                size: 28,
+              ),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        CreatePostScreen(initialPostData: widget.post),
+                  ),
+                );
+                if (result != null &&
+                    result is Map<String, dynamic> &&
+                    mounted) {
+                  setState(() {
+                    widget.post.addAll(result);
+                  });
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.redAccent,
+                size: 26,
+              ),
+              onPressed: () => _showDeleteDialog(context, widget.post['id']),
+            ),
+          ],
         ],
       ),
     );
@@ -544,8 +542,9 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Postu Sil"),
-        content: const Text("Bu öneriyi kaldırmak istediğine emin misin?"),
+        content: const Text("Bu harika anıyı silmek istediğine emin misin?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -559,11 +558,14 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                   .eq('id', postId);
               if (mounted) {
                 Navigator.pop(dialogContext);
-                Navigator.pop(context);
                 widget.onDelete();
+                Navigator.pop(context);
               }
             },
-            child: const Text("Sil", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "Sil",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

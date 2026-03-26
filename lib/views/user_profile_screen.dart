@@ -44,7 +44,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final String myId = currentUser.id;
     final String userId = widget.targetUserId ?? myId;
 
-    // Pull-to-refresh yaparken loading spinner gözükmesin istiyorsan burayı kontrol edebiliriz
     if (mounted && _userPosts.isEmpty) setState(() => _isLoading = true);
 
     try {
@@ -74,6 +73,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       debugPrint("Veri yükleme hatası: $e");
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // --- KOLEKSİYON PAYLAŞMA MANTIĞI ---
+  void _onShareCollection(Map<String, dynamic> col) {
+    showAdvancedShareSheet(
+      context,
+      col['id'].toString(),
+      col['isim'] ?? "Koleksiyon",
+      // Eğer share_sheet içinde bir callback mekanizman varsa buraya ekleyebilirsin
+      // Örn: onUserSelected: (targetUserId) => _sendCollection(targetUserId, col['id'])
+    );
   }
 
   Widget _buildNotificationBadge() {
@@ -107,7 +117,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       builder: (_) => const NotificationsScreen(),
                     ),
                   ).then((_) {
-                    // Bildirimlerden geri dönünce badge'in güncellenmesi için sayfayı tetikle
                     if (mounted) setState(() {});
                   }),
             ),
@@ -130,7 +139,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  // --- TAKİP İŞLEMLERİ ---
   Future<void> _handleFollowAction() async {
     final myId = _supabase.auth.currentUser!.id;
     final targetId = widget.targetUserId!;
@@ -262,15 +270,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ],
         ],
       ),
-      // --- PULL TO REFRESH BURADA BAŞLIYOR ---
       body: RefreshIndicator(
         color: Colors.deepOrange,
         onRefresh: _loadAllProfileData,
         child: DefaultTabController(
           length: 2,
           child: NestedScrollView(
-            physics:
-                const AlwaysScrollableScrollPhysics(), // İçerik az olsa bile çekmeyi sağlar
+            physics: const AlwaysScrollableScrollPhysics(),
             headerSliverBuilder: (context, _) => [
               SliverToBoxAdapter(
                 child: Column(
@@ -318,8 +324,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ),
     );
   }
-
-  // --- WIDGET PARÇALARI ---
 
   Widget _buildProfileHeader(String userId) {
     return Padding(
@@ -510,8 +514,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildPostGrid() {
-    if (_userPosts.isEmpty)
+    if (_userPosts.isEmpty) {
       return const Center(child: Text("Henüz bir uğrak paylaşılmamış."));
+    }
     return GridView.builder(
       padding: const EdgeInsets.all(1),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -566,11 +571,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
           ),
-          onShare: () => showAdvancedShareSheet(
-            context,
-            col['id'].toString(),
-            col['isim'] ?? "Koleksiyon",
-          ),
+          // --- NAVIGASYON BURADA TETİKLENİYOR ---
+          onShare: () => _onShareCollection(col),
           onMenuSelected: (val) async {
             if (val == 'delete') {
               await _collectionService.deleteCollection(col['id'].toString());
