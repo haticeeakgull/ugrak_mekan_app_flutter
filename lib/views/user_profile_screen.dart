@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/follow_list_screen.dart';
+import 'package:ugrak_mekan_app/views/post_detail_screen.dart'; // Yeni eklendi
 import '../services/collection_service.dart';
 import '../services/follow_service.dart';
 import '../widgets/share_sheet.dart';
@@ -55,7 +56,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _supabase.from('profiles').select().eq('id', userId).maybeSingle(),
         _supabase
             .from('cafe_postlar')
-            .select()
+            // DETAY SAYFASI İÇİN İLİŞKİSEL VERİLERİ (KAFE ADI VB.) ÇEKİYORUZ
+            .select(
+              '*, ilce_isimli_kafeler(kafe_adi), profiles(username, avatar_url)',
+            )
             .eq('user_id', userId)
             .order('paylasim_tarihi', ascending: false),
         _collectionService.fetchUserCollections(userId),
@@ -75,14 +79,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
+  // --- UĞRAKLARIM (GRID) YAPISI ---
+  Widget _buildPostGrid() {
+    if (_userPosts.isEmpty) {
+      return const Center(child: Text("Henüz bir uğrak paylaşılmamış."));
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(1),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 1,
+        mainAxisSpacing: 1,
+      ),
+      itemCount: _userPosts.length,
+      itemBuilder: (context, index) {
+        final post = _userPosts[index];
+        return GestureDetector(
+          onTap: () {
+            // KEŞFETTEKİ GİBİ KAYDIRILABİLİR DETAY SAYFASINA GİDİŞ
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PostDetailScreen(
+                  allPosts: _userPosts
+                      .cast<Map<String, dynamic>>(), // Tüm postlar listesi
+                  initialIndex: index, // Tıklanan postun sırası
+                ),
+              ),
+            ).then(
+              (_) => _loadAllProfileData(),
+            ); // Silme/güncelleme ihtimaline karşı yenile
+          },
+          child: Hero(
+            tag: 'post_${post['id']}', // Yumuşak geçiş animasyonu
+            child: Image.network(
+              post['foto_url'] ?? "https://via.placeholder.com/150",
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // --- KOLEKSİYON PAYLAŞMA MANTIĞI ---
   void _onShareCollection(Map<String, dynamic> col) {
     showAdvancedShareSheet(
       context,
       col['id'].toString(),
       col['isim'] ?? "Koleksiyon",
-      // Eğer share_sheet içinde bir callback mekanizman varsa buraya ekleyebilirsin
-      // Örn: onUserSelected: (targetUserId) => _sendCollection(targetUserId, col['id'])
     );
   }
 
@@ -246,6 +291,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        leading: !isMe ? const BackButton(color: Colors.black) : null,
         title: Text(
           _profileData?['username'] ?? "Kullanıcı",
           style: const TextStyle(
@@ -312,7 +358,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             body: TabBarView(
               children: [
                 canSeeContent
-                    ? _buildPostGrid()
+                    ? _buildPostGrid() // Güncellenen metod
                     : _buildPrivateAccountMessage(),
                 canSeeContent
                     ? _buildCollectionGrid(isMe)
@@ -325,6 +371,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  // --- STAT VE HEADER YARDIMCILARI (AYNEN KORUNDU) ---
   Widget _buildProfileHeader(String userId) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -513,28 +560,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildPostGrid() {
-    if (_userPosts.isEmpty) {
-      return const Center(child: Text("Henüz bir uğrak paylaşılmamış."));
-    }
-    return GridView.builder(
-      padding: const EdgeInsets.all(1),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 1,
-        mainAxisSpacing: 1,
-      ),
-      itemCount: _userPosts.length,
-      itemBuilder: (context, index) {
-        final post = _userPosts[index];
-        return Image.network(
-          post['foto_url'] ?? "https://via.placeholder.com/150",
-          fit: BoxFit.cover,
-        );
-      },
-    );
-  }
-
   Widget _buildCollectionGrid(bool isMe) {
     return GridView.builder(
       padding: const EdgeInsets.all(12),
@@ -571,7 +596,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
           ),
-          // --- NAVIGASYON BURADA TETİKLENİYOR ---
           onShare: () => _onShareCollection(col),
           onMenuSelected: (val) async {
             if (val == 'delete') {

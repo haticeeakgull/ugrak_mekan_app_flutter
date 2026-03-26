@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cafe_model.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiService {
   final _supabase = Supabase.instance.client;
@@ -14,17 +14,28 @@ class ApiService {
     String? vibe,
   }) async {
     try {
-      // 1. BERT Vektörünü Al (FastAPI)
-      final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
+      final String hfUrl = dotenv.env['BERT_API_URL'] ?? '';
+
+      if (hfUrl.isEmpty) {
+        throw Exception(
+          'BERT_API_URL bulunamadı! .env dosyanızı kontrol edin.',
+        );
+      }
+
       final response = await http.post(
-        Uri.parse('http://$host:8000/embed'),
+        Uri.parse(hfUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'text': query}),
       );
 
-      if (response.statusCode != 200) throw Exception('BERT API Hatası');
+      if (response.statusCode != 200) {
+        print("Hata Kodu: ${response.statusCode}");
+        print("Hata Mesajı: ${response.body}");
+        throw Exception('BERT API Hatası');
+      }
 
-      final List<dynamic> embedding = jsonDecode(response.body)['embedding'];
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final List<dynamic> embedding = responseData['embedding'];
 
       // 2. Supabase RPC Çağrısı
       final List<dynamic> data = await _supabase.rpc(
@@ -81,7 +92,7 @@ class ApiService {
           .from('cafe_yorumlar')
           .insert({
             'cafe_id': cafeId,
-            'kullanici_id': user.id, // kullanici_adi SİLİNDİ
+            'kullanici_id': user.id,
             'yorum_metni': icerik,
           })
           .select()
@@ -91,8 +102,7 @@ class ApiService {
       if (profilimdePaylas) {
         await _supabase.from('cafe_postlar').insert({
           'cafe_id': cafeId,
-          'user_id':
-              user.id, // cafe_postlar tablosundaki sütun adın 'user_id' idi
+          'user_id': user.id,
           'yorum_id': yorumData['id'],
           'baslik': 'Yeni Bir Mekan Önerisi!',
           'icerik': icerik,

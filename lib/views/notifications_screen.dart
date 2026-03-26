@@ -90,7 +90,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             icon = Icons.check_circle;
             break;
           case 'like':
-            message = "önerini beğendi.";
+            message = "uğrak önerini beğendi.";
             icon = Icons.favorite;
             break;
         }
