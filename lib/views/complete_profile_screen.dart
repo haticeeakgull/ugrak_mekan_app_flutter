@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart'; // Yeni import
 
 class CompleteProfileScreen extends StatefulWidget {
   const CompleteProfileScreen({super.key});
@@ -19,7 +20,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   bool _isLoading = false;
   bool _hasChanges = false;
-  bool _isPrivate = false; // Hesabın gizlilik durumu
+  bool _isPrivate = false;
   File? _imageFile;
   String? _avatarUrl;
 
@@ -28,7 +29,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     super.initState();
     _loadInitialData();
 
-    // Dinleme: Herhangi bir field değişirse butonu güncelle
     _usernameController.addListener(_onFieldChanged);
     _fullNameController.addListener(_onFieldChanged);
     _bioController.addListener(_onFieldChanged);
@@ -71,9 +71,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           _fullNameController.text = data['full_name'] ?? "";
           _bioController.text = data['bio'] ?? "";
           _avatarUrl = data['avatar_url'];
-          _isPrivate =
-              data['is_private'] ??
-              false; // Veritabanından gizlilik bilgisini al
+          _isPrivate = data['is_private'] ?? false;
           _hasChanges = false;
         });
       }
@@ -82,18 +80,48 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     }
   }
 
+  // --- YENİ: GÖRÜNTÜ KIRPMA FONKSİYONU ---
+  Future<void> _cropImage(String filePath) async {
+    try {
+      CroppedFile? croppedFile = await ImageCropper().cropImage(
+        sourcePath: filePath,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1), // Kare oran
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Fotoğrafı Düzenle',
+            toolbarColor: Colors.deepOrange,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Fotoğrafı Düzenle',
+            doneButtonTitle: 'Bitti',
+            cancelButtonTitle: 'Vazgeç',
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        setState(() {
+          _imageFile = File(croppedFile.path);
+          _hasChanges = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("Kırpma hatası: $e");
+    }
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 50,
+      imageQuality: 80, // Kırpma olacağı için kaliteyi biraz yüksek tuttuk
     );
 
     if (image != null) {
-      setState(() {
-        _imageFile = File(image.path);
-        _hasChanges = true;
-      });
+      await _cropImage(image.path); // Seçilen resmi kırpmaya gönder
     }
   }
 
@@ -107,7 +135,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     try {
       String? finalAvatarUrl = _avatarUrl;
 
-      // 1. Fotoğraf Yükleme İşlemi
       if (_imageFile != null) {
         final userId = user.id;
         final fileExt = _imageFile!.path.split('.').last;
@@ -128,18 +155,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         updatedItems.add("Profil fotoğrafı");
       }
 
-      // 2. Profil Bilgilerini Güncelleme (is_private eklendi)
       await _supabase.from('profiles').upsert({
         'id': user.id,
         'username': _usernameController.text.trim(),
         'full_name': _fullNameController.text.trim(),
         'bio': _bioController.text.trim(),
         'avatar_url': finalAvatarUrl,
-        'is_private': _isPrivate, // Gizlilik ayarını kaydet
+        'is_private': _isPrivate,
       });
       updatedItems.add("Profil bilgileri");
 
-      // 3. E-posta Güncelleme Kontrolü
       if (_emailController.text.trim() != user.email) {
         await _supabase.auth.updateUser(
           UserAttributes(email: _emailController.text.trim()),
@@ -176,7 +201,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text(
-          "Profilini Şekillendir",
+          "Profil Ayarları",
           style: TextStyle(color: Colors.black87),
         ),
         backgroundColor: Colors.transparent,
@@ -187,7 +212,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            // --- PROFİL FOTOĞRAFI ---
             Center(
               child: Stack(
                 children: [
@@ -227,7 +251,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               ),
             ),
             const SizedBox(height: 30),
-
             _buildCustomField(
               controller: _fullNameController,
               label: "Ad Soyad",
@@ -249,12 +272,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               maxLines: 3,
               themeColor: themeColor,
             ),
-
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Divider(),
             ),
-
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -263,8 +284,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // --- GİZLİLİK AYARI (YENİ) ---
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -298,19 +317,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 },
               ),
             ),
-
             const SizedBox(height: 16),
-
             _buildCustomField(
               controller: _emailController,
               label: "E-posta Adresi",
               icon: Icons.email_outlined,
               themeColor: themeColor,
             ),
-
             const SizedBox(height: 40),
-
-            // --- GÜNCELLEME BUTONU ---
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -327,7 +341,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
-                        _hasChanges ? "Bilgileri Güncelle" : "Hadi Başlayalım!",
+                        _hasChanges ? "Bilgileri Güncelle" : "Kaydet",
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

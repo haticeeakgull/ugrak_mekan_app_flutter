@@ -544,7 +544,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Postu Sil"),
-        content: const Text("Bu harika anıyı silmek istediğine emin misin?"),
+        content: const Text("Bu anıyı silmek istediğine emin misin?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),

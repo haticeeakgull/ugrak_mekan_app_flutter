@@ -125,7 +125,7 @@ class _AuthScreenState extends State<AuthScreen> {
               const Icon(Icons.coffee_rounded, size: 80, color: Colors.orange),
               const SizedBox(height: 10),
               const Text(
-                "Uğrak Mekanlar",
+                "UĞRAK",
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,

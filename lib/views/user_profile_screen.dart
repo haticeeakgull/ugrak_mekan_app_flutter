@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/follow_list_screen.dart';
-import 'package:ugrak_mekan_app/views/post_detail_screen.dart'; // Yeni eklendi
+import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
 import '../services/collection_service.dart';
 import '../services/follow_service.dart';
 import '../widgets/share_sheet.dart';
@@ -56,7 +56,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _supabase.from('profiles').select().eq('id', userId).maybeSingle(),
         _supabase
             .from('cafe_postlar')
-            // DETAY SAYFASI İÇİN İLİŞKİSEL VERİLERİ (KAFE ADI VB.) ÇEKİYORUZ
             .select(
               '*, ilce_isimli_kafeler(kafe_adi), profiles(username, avatar_url)',
             )
@@ -79,7 +78,40 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
-  // --- UĞRAKLARIM (GRID) YAPISI ---
+  // --- YENİ: PROFİL FOTOĞRAFI GÖRÜNTÜLEME ---
+  void _showFullProfileImage(String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Hero(
+                tag: 'profile_pic_zoom',
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  width: MediaQuery.of(context).size.width,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.person, color: Colors.white, size: 100),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPostGrid() {
     if (_userPosts.isEmpty) {
       return const Center(child: Text("Henüz bir uğrak paylaşılmamış."));
@@ -96,22 +128,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         final post = _userPosts[index];
         return GestureDetector(
           onTap: () {
-            // KEŞFETTEKİ GİBİ KAYDIRILABİLİR DETAY SAYFASINA GİDİŞ
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => PostDetailScreen(
-                  allPosts: _userPosts
-                      .cast<Map<String, dynamic>>(), // Tüm postlar listesi
-                  initialIndex: index, // Tıklanan postun sırası
+                  allPosts: _userPosts.cast<Map<String, dynamic>>(),
+                  initialIndex: index,
                 ),
               ),
-            ).then(
-              (_) => _loadAllProfileData(),
-            ); // Silme/güncelleme ihtimaline karşı yenile
+            ).then((_) => _loadAllProfileData());
           },
           child: Hero(
-            tag: 'post_${post['id']}', // Yumuşak geçiş animasyonu
+            tag: 'post_${post['id']}',
             child: Image.network(
               post['foto_url'] ?? "https://via.placeholder.com/150",
               fit: BoxFit.cover,
@@ -122,7 +150,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  // --- KOLEKSİYON PAYLAŞMA MANTIĞI ---
   void _onShareCollection(Map<String, dynamic> col) {
     showAdvancedShareSheet(
       context,
@@ -358,7 +385,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             body: TabBarView(
               children: [
                 canSeeContent
-                    ? _buildPostGrid() // Güncellenen metod
+                    ? _buildPostGrid()
                     : _buildPrivateAccountMessage(),
                 canSeeContent
                     ? _buildCollectionGrid(isMe)
@@ -371,17 +398,30 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  // --- STAT VE HEADER YARDIMCILARI (AYNEN KORUNDU) ---
   Widget _buildProfileHeader(String userId) {
+    final String avatarUrl =
+        _profileData?['avatar_url'] ?? "https://via.placeholder.com/150";
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 42,
-            backgroundColor: Colors.grey[200],
-            backgroundImage: NetworkImage(
-              _profileData?['avatar_url'] ?? "https://via.placeholder.com/150",
+          // GÜNCELLEDİĞİMİZ KISIM: Profil Fotoğrafı Tıklanabilir ve Hero Efektli
+          GestureDetector(
+            onTap: () => _showFullProfileImage(avatarUrl),
+            child: Hero(
+              tag: 'profile_pic_zoom',
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey[200]!, width: 2),
+                ),
+                child: CircleAvatar(
+                  radius: 42,
+                  backgroundColor: Colors.grey[100],
+                  backgroundImage: NetworkImage(avatarUrl),
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -411,7 +451,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         if (snapshot.hasError) return _buildStatItem("0", label, userId, index);
 
         final allFollows = snapshot.data ?? [];
-
         final filteredFollows = allFollows.where((f) {
           final isCorrectUser = (label == "Takipçi")
               ? f['following_id'] == userId

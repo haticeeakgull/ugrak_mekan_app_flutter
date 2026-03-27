@@ -51,28 +51,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Future<void> _fetchKafeler() async {
     try {
-      // 1. Query'yi güncelledik: Postun bağlı olduğu kafe bilgilerini de çekiyoruz
-      final data = await supabase.from('ilce_isimli_kafeler').select('''
+      // 1. !inner takısını sildik ki postu olmayan kafeler de gelsin.
+      // 2. Filtreyi doğrudan select içinde parantez içinde belirttik.
+      final data = await supabase
+          .from('ilce_isimli_kafeler')
+          .select('''
         *,
         cafe_postlar (
           *,
-          profiles (username),
+          profiles!inner (username, is_private),
           ilce_isimli_kafeler (kafe_adi) 
         )
-      ''');
+      ''')
+          .filter('cafe_postlar.profiles.is_private', 'eq', false);
+      // .filter kullanarak 'soft' bir filtreleme yapıyoruz.
 
       if (mounted) {
         setState(() {
           _kafeler = data;
 
-          // 2. Postları ayrıştırırken kafe bilgilerini içine enjekte ediyoruz
+          // Postları ayrıştırırken hata almamak için boş liste kontrolü ekliyoruz
           _tumOneriPostlari = _kafeler.expand((cafe) {
             final posts = cafe['cafe_postlar'] as List? ?? [];
             return posts.map((post) {
               final postMap = Map<String, dynamic>.from(post);
-
-              // Eğer postun içinde kafe bilgisi yoksa, üst klastan (cafe) gelen bilgiyi ekle
-              // Bu, PostDetailScreen'deki "Bilinmeyen Mekan"ı çözer.
               if (postMap['ilce_isimli_kafeler'] == null) {
                 postMap['ilce_isimli_kafeler'] = {'kafe_adi': cafe['kafe_adi']};
               }
@@ -80,7 +82,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             });
           }).toList()..shuffle();
 
-          _updateMarkers();
+          _updateMarkers(); // Haritadaki imleçleri tekrar çiz
           _isMapLoading = false;
         });
       }

@@ -160,7 +160,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
+        centerTitle: true, // 1. Bu satırı ekleyerek başlık alanını ortalıyoruz
         title: Column(
+          mainAxisSize: MainAxisSize
+              .min, // Kolonun sadece içeriği kadar yer kaplamasını sağlar
+          crossAxisAlignment:
+              CrossAxisAlignment.center, // 2. Yazıları kendi içinde ortalıyoruz
           children: [
             const Text(
               'Uğrak Mekan ☕',
@@ -176,13 +181,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
           ],
         ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.person_pin, color: Colors.deepOrange),
-          onPressed: () => Navigator.pushNamed(context, '/complete-profile'),
-        ),
+
+        // centerTitle: true,
+        // backgroundColor: Colors.transparent,
+        // elevation: 0,
+        // leading: IconButton(
+        //   icon: const Icon(Icons.person_pin, color: Colors.deepOrange),
+        //   onPressed: () => Navigator.pushNamed(context, '/complete-profile'),
+        // ),
         actions: [
           IconButton(
             onPressed: _showLogoutDialog,
@@ -284,7 +290,8 @@ class _HomeScreenState extends State<HomeScreen> {
               items: [
                 const DropdownMenuItem(value: null, child: Text("Tüm Tarzlar")),
                 ..._vibeler.map(
-                  (v) => DropdownMenuItem(value: v, child: Text(v)),
+                  (v) =>
+                      DropdownMenuItem(value: v, child: Text(v.toUpperCase())),
                 ),
               ],
               onChanged: (val) => setState(() => _secilenVibe = val),
