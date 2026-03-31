@@ -39,7 +39,7 @@ class ApiService {
 
       // 2. Supabase RPC Çağrısı
       final List<dynamic> data = await _supabase.rpc(
-        'kafe_ara_v5',
+        'kafe_ara_v6',
         params: {
           'search_query': query,
           'query_embedding': embedding,
