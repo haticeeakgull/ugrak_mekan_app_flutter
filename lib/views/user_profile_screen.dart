@@ -38,6 +38,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _loadAllProfileData();
   }
 
+  // Future<List<Map<String, dynamic>>> fetchUserBadges(String userId) async {
+  //   try {
+  //     final supabase = Supabase.instance.client;
+
+  //     // NOT: Eğer tabloların 'badge_id' ve 'cafe_id' üzerinden bağlıysa
+  //     // bu yazım şekli Supabase'in en sağlıklı ilişki kurma yöntemidir.
+  //     final response = await supabase
+  //         .from('user_badges')
+  //         .select('''
+  //         *,
+  //         badges:badge_id (*),
+  //         cafes:cafe_id (name)
+  //       ''')
+  //         .eq('user_id', userId);
+
+  //     debugPrint("Gelen Veri: $response"); // Konsolu mutlaka kontrol et!
+  //     return List<Map<String, dynamic>>.from(response);
+  //   } catch (e) {
+  //     debugPrint("Hata: $e");
+  //     return [];
+  //   }
+  // }
+
   Future<void> _loadAllProfileData() async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return;
@@ -359,7 +382,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     _buildBioSection(),
                     _buildMainActions(isMe),
                     const Padding(padding: EdgeInsets.fromLTRB(16, 24, 16, 8)),
-                    if (isMe) buildBadgeSection(),
+                    if (isMe) buildBadgeSection(userId),
                     const SizedBox(height: 16),
                   ],
                 ),
