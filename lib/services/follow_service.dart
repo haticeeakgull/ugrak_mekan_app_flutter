@@ -5,35 +5,45 @@ class FollowService {
 
   // Takip durumunu kontrol et
   Future<String> getFollowStatus(String followerId, String followingId) async {
-    final res = await _supabase
-        .from('follows')
-        .select('status')
-        .eq('follower_id', followerId)
-        .eq('following_id', followingId)
-        .maybeSingle();
+    try {
+      final res = await _supabase
+          .from('follows')
+          .select('status')
+          .eq('follower_id', followerId)
+          .eq('following_id', followingId)
+          .maybeSingle();
 
-    return res != null ? res['status'] : "none";
+      return res != null ? res['status'] : "none";
+    } catch (e) {
+      return "none";
+    }
   }
 
-  // Takip et veya İstek gönder
+  // Takip et veya İstek gönder (DÜZELTİLDİ)
   Future<void> followUser({
     required String myId,
     required String targetId,
     required bool isPrivate,
   }) async {
+    // 1. Hesap gizliliğine göre durumu belirle
     String newStatus = isPrivate ? "pending" : "following";
 
+    // 2. 'follows' tablosuna kaydı ekle
     await _supabase.from('follows').insert({
       'follower_id': myId,
       'following_id': targetId,
       'status': newStatus,
     });
 
-    // Bildirim gönder
+    // 3. Bildirim gönder (BURASI KRİTİK)
     await _supabase.from('notifications').insert({
       'sender_id': myId,
       'receiver_id': targetId,
-      'type': isPrivate ? 'follow_request' : 'follow_accept',
+      // DÜZELTME: Hesap gizliyse 'follow_request', açıksa 'follow' bildirimi gider.
+      // 'follow_accept' buraya ait değildir, sadece onay butonuna basıldığında kullanılır.
+      'type': isPrivate ? 'follow_request' : 'follow',
+      'is_read': false,
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 
@@ -43,6 +53,13 @@ class FollowService {
       'follower_id': myId,
       'following_id': targetId,
     });
+
+    // Opsiyonel: Takibi bıraktığında eski bildirimleri de silebilirsin
+    // await _supabase.from('notifications').delete().match({
+    //   'sender_id': myId,
+    //   'receiver_id': targetId,
+    //   'type': 'follow_request'
+    // });
   }
 
   // Takipçileri getir

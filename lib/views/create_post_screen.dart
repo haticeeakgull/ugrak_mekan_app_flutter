@@ -23,7 +23,7 @@ class CreatePostScreen extends StatefulWidget {
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  final List<dynamic> _mediaList = []; // Hata uyarısı için final yapıldı
+  final List<dynamic> _mediaList = [];
   bool _isLoading = false;
 
   final _supabase = Supabase.instance.client;
@@ -101,7 +101,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           if (_isEditMode && _selectedCafeName == null) {
             _selectedCafeName = _allCafes.firstWhere(
               (c) => c['id'].toString() == _selectedCafeId,
-              orElse: () => {'kafe_adi': 'Mekan'},
+              orElse: () => {'kafe_adi': 'Mekan Seçilmedi'},
             )['kafe_adi'];
           }
         });
@@ -115,46 +115,56 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final List<XFile> pickedFiles = await _picker.pickMultiImage(
       imageQuality: 70,
     );
+
     if (pickedFiles.isNotEmpty) {
       for (var xFile in pickedFiles) {
-        File? cropped = await _cropImage(File(xFile.path));
-        if (cropped != null) setState(() => _mediaList.add(cropped));
+        final File originalFile = File(xFile.path);
+        if (await originalFile.exists()) {
+          File? cropped = await _cropImage(originalFile);
+          if (cropped != null && mounted) {
+            setState(() => _mediaList.add(cropped));
+          }
+        }
       }
     }
   }
 
   Future<File?> _cropImage(File imageFile) async {
-    // HATA DÜZELTMESİ: ImageCropper'da aspectRatioPresets uiSettings içine taşındı
-    CroppedFile? croppedFile = await ImageCropper().cropImage(
-      sourcePath: imageFile.path,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Fotoğrafı Düzenle',
-          toolbarColor: Colors.deepOrange,
-          toolbarWidgetColor: Colors.white,
-          initAspectRatio: CropAspectRatioPreset.square,
-          lockAspectRatio: false,
-          aspectRatioPresets: [
-            // Buraya taşındı
-            CropAspectRatioPreset.square,
-            CropAspectRatioPreset.ratio3x2,
-            CropAspectRatioPreset.original,
-          ],
-        ),
-        IOSUiSettings(
-          title: 'Düzenle',
-          aspectRatioPresets: [
-            CropAspectRatioPreset.square,
-            CropAspectRatioPreset.ratio3x2,
-            CropAspectRatioPreset.original,
-          ],
-        ),
-      ],
-    );
-    return croppedFile != null ? File(croppedFile.path) : null;
+    // İşletim sisteminin dosyayı kilitlemesini önlemek için kısa bir gecikme
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    try {
+      CroppedFile? croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Fotoğrafı Düzenle',
+            toolbarColor: Colors.deepOrange,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(title: 'Düzenle'),
+        ],
+      );
+
+      if (croppedFile != null) {
+        final file = File(croppedFile.path);
+        if (await file.exists()) return file;
+      }
+    } catch (e) {
+      debugPrint("Kırpma hatası: $e");
+    }
+    return null;
   }
 
   Future<void> _uploadPost() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      _showSnackBar("Lütfen önce giriş yapın.");
+      return;
+    }
+
     if (_selectedCafeId == null || _mediaList.isEmpty) {
       _showSnackBar("Mekan seçmeyi ve fotoğraf eklemeyi unutma!");
       return;
@@ -163,27 +173,43 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final user = _supabase.auth.currentUser;
       List<String> finalUrls = [];
+      // Listeyi kopyalıyoruz ki döngü sırasında değişikliklerden etkilenmesin
+      final List<dynamic> uploadQueue = List.from(_mediaList);
 
-      for (var item in _mediaList) {
+      for (int i = 0; i < uploadQueue.length; i++) {
+        var item = uploadQueue[i];
+
         if (item is String) {
           finalUrls.add(item);
         } else if (item is File) {
-          final fileName =
-              '${DateTime.now().millisecondsSinceEpoch}_${_mediaList.indexOf(item)}.jpg';
-          final path = 'cafe_photos/${user!.id}/$fileName';
-          await _supabase.storage.from('posts').upload(path, item);
-          finalUrls.add(_supabase.storage.from('posts').getPublicUrl(path));
+          if (!await item.exists()) continue;
+
+          // Eşsiz dosya ismi: zaman_userid_index
+          final String fileName =
+              '${DateTime.now().millisecondsSinceEpoch}_${user.id}_$i.jpg';
+          final String path = 'cafe_photos/${user.id}/$fileName';
+
+          try {
+            await _supabase.storage.from('posts').upload(path, item);
+            final String publicUrl = _supabase.storage
+                .from('posts')
+                .getPublicUrl(path);
+            finalUrls.add(publicUrl);
+            debugPrint("Yüklendi: $publicUrl");
+          } catch (storageError) {
+            debugPrint("Storage hatası ($i): $storageError");
+            // Bir fotoğraf başarısız olursa diğerleri devam etsin
+          }
         }
       }
 
-      final data = {
+      final Map<String, dynamic> data = {
         'cafe_id': _selectedCafeId,
-        'user_id': user!.id,
+        'user_id': user.id,
         'baslik': _titleController.text.trim(),
         'icerik': _contentController.text.trim(),
-        'foto_url': finalUrls.first,
+        'foto_url': finalUrls.isNotEmpty ? finalUrls.first : null,
         'foto_listesi': finalUrls,
         'degerlendirme': {
           "kalabalik": _kalabalik.toInt(),
@@ -209,10 +235,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
     } catch (e) {
       _showSnackBar("Bir sorun oluştu: $e");
+      debugPrint("Genel hata: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // --- UI METODLARI ---
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +253,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: _isLoading
@@ -231,81 +261,65 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               child: CircularProgressIndicator(color: Colors.deepOrange),
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!_isEditMode) _buildCafeSelector(),
-                  _buildSectionTitle(
-                    "Fotoğraflar",
-                    Icons.photo_library_outlined,
-                  ),
+                  _buildSectionTitle("Fotoğraflar", Icons.photo_camera_back),
                   const SizedBox(height: 12),
                   _buildPhotoList(),
                   const SizedBox(height: 25),
                   _buildTextFields(),
-                  const Divider(height: 40),
-                  // HATA DÜZELTMESİ: edit_rating_rounded yerine star_rate kullanıldı
-                  _buildSectionTitle("Mekan Analizi", Icons.star_rate_rounded),
-                  const SizedBox(height: 15),
+                  const Divider(height: 40, thickness: 1),
+                  _buildSectionTitle("Mekan Analizi", Icons.analytics_outlined),
+                  const SizedBox(height: 20),
                   _buildSlider(
                     "Kalabalık",
-                    Icons.groups,
+                    Icons.people_outline,
                     _kalabalik,
                     (v) => setState(() => _kalabalik = v),
                   ),
                   _buildSlider(
                     "Ses Düzeyi",
-                    Icons.volume_up,
+                    Icons.volume_down_outlined,
                     _ses,
                     (v) => setState(() => _ses = v),
                   ),
                   _buildSlider(
                     "Priz Sayısı",
-                    Icons.power,
+                    Icons.power_outlined,
                     _priz,
                     (v) => setState(() => _priz = v),
                   ),
                   _buildSlider(
                     "İnternet",
-                    Icons.wifi,
+                    Icons.wifi_outlined,
                     _internet,
                     (v) => setState(() => _internet = v),
                   ),
                   _buildSlider(
                     "Çalışma",
-                    Icons.laptop,
+                    Icons.laptop_mac_outlined,
                     _calisma,
                     (v) => setState(() => _calisma = v),
                   ),
                   const SizedBox(height: 25),
-                  _buildSectionTitle("Vibe Etiketleri", Icons.style_outlined),
+                  _buildSectionTitle("Vibe Etiketleri", Icons.mood_outlined),
                   const SizedBox(height: 12),
                   _buildVibeChips(),
                   const SizedBox(height: 40),
                   _buildSubmitButton(),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.deepOrange, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
-  }
-
   Widget _buildPhotoList() {
     return SizedBox(
-      height: 120,
+      height: 110,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _mediaList.length + 1,
@@ -315,45 +329,62 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               onTap: _pickImages,
               child: Container(
                 width: 100,
-                margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
-                  // HATA DÜZELTMESİ: withOpacity yerine withValues kullanıldı
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3),
-                  ),
+                  color: Colors.orange.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
                 ),
-                child: const Icon(Icons.add_a_photo, color: Colors.orange),
+                child: const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: Colors.orange,
+                  size: 30,
+                ),
               ),
             );
           }
           final item = _mediaList[index];
-          return Stack(
-            children: [
-              Container(
-                width: 100,
-                margin: const EdgeInsets.only(right: 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
+          return Container(
+            width: 100,
+            margin: const EdgeInsets.only(right: 12),
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
                   child: item is File
-                      ? Image.file(item, fit: BoxFit.cover)
-                      : Image.network(item, fit: BoxFit.cover),
+                      ? Image.file(
+                          item,
+                          fit: BoxFit.cover,
+                          width: 100,
+                          height: 110,
+                        )
+                      : Image.network(
+                          item,
+                          fit: BoxFit.cover,
+                          width: 100,
+                          height: 110,
+                        ),
                 ),
-              ),
-              Positioned(
-                right: 15,
-                top: 5,
-                child: GestureDetector(
-                  onTap: () => setState(() => _mediaList.removeAt(index)),
-                  child: const CircleAvatar(
-                    radius: 10,
-                    backgroundColor: Colors.red,
-                    child: Icon(Icons.close, size: 14, color: Colors.white),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _mediaList.removeAt(index)),
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -367,16 +398,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           controller: _titleController,
           decoration: InputDecoration(
             labelText: 'Başlık',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            hintText: 'Mekan hakkında kısa bir başlık...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+            prefixIcon: const Icon(Icons.title),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         TextField(
           controller: _contentController,
-          maxLines: 3,
+          maxLines: 4,
           decoration: InputDecoration(
-            labelText: 'Deneyimlerini anlat...',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            labelText: 'Deneyimin',
+            hintText: 'Ortam nasıldı? Kahveleri nasıl? Çalışmak için uygun mu?',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
           ),
         ),
       ],
@@ -389,46 +423,50 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     double value,
     Function(double) onChanged,
   ) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: Colors.grey[600]),
-            const SizedBox(width: 8),
-            Text(title),
-            const Spacer(),
-            Text(
-              "${value.toInt()}/5",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.deepOrange,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: Colors.grey[700]),
+              const SizedBox(width: 10),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+              const Spacer(),
+              Text(
+                "${value.toInt()}/5",
+                style: const TextStyle(
+                  color: Colors.deepOrange,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
-        ),
-        Slider(
-          value: value,
-          min: 1,
-          max: 5,
-          divisions: 4,
-          activeColor: Colors.deepOrange,
-          onChanged: onChanged,
-        ),
-      ],
+            ],
+          ),
+          Slider(
+            value: value,
+            min: 1,
+            max: 5,
+            divisions: 4,
+            activeColor: Colors.deepOrange,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildVibeChips() {
     return Wrap(
       spacing: 8,
+      runSpacing: 0,
       children: _availableVibes.map((vibe) {
         final isSelected = _selectedVibes.contains(vibe);
         return FilterChip(
           label: Text(
             vibe,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black87,
               fontSize: 12,
+              color: isSelected ? Colors.white : Colors.black87,
             ),
           ),
           selected: isSelected,
@@ -451,14 +489,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.deepOrange,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(16),
           ),
+          elevation: 2,
         ),
         child: Text(
-          _isEditMode ? "GÜNCELLE" : "PAYLAŞ",
+          _isEditMode ? "GÜNCELLEMEYİ KAYDET" : "ŞİMDİ PAYLAŞ",
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
         ),
       ),
@@ -469,29 +509,30 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     return GestureDetector(
       onTap: _showCafePicker,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         margin: const EdgeInsets.only(bottom: 25),
         decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+          color: Colors.orange.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange.withOpacity(0.2)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.storefront, color: Colors.orange),
+            const Icon(Icons.location_on_outlined, color: Colors.orange),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                _selectedCafeName ?? "Hangi Mekandasın?",
+                _selectedCafeName ?? "Hangi mekandasın?",
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
                   color: _selectedCafeName == null
-                      ? Colors.orange
+                      ? Colors.orange[800]
                       : Colors.black87,
                 ),
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.orange),
+            const Icon(Icons.keyboard_arrow_down, color: Colors.orange),
           ],
         ),
       ),
@@ -504,18 +545,28 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.8,
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
         builder: (_, controller) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
           ),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
           child: Column(
             children: [
+              Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                margin: const EdgeInsets.only(bottom: 20),
+              ),
               TextField(
                 decoration: InputDecoration(
-                  hintText: "Mekan ara...",
+                  hintText: "Mekan ismiyle ara...",
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: Colors.grey[100],
@@ -534,15 +585,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       .toList();
                 }),
               ),
+              const SizedBox(height: 15),
               Expanded(
-                child: ListView.builder(
+                child: ListView.separated(
                   controller: controller,
                   itemCount: _filteredCafes.length,
+                  separatorBuilder: (_, __) => const Divider(),
                   itemBuilder: (context, index) {
                     final cafe = _filteredCafes[index];
                     return ListTile(
-                      leading: const Icon(Icons.coffee, color: Colors.orange),
-                      title: Text(cafe['kafe_adi']),
+                      title: Text(
+                        cafe['kafe_adi'],
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      leading: const CircleAvatar(
+                        backgroundColor: Colors.orange,
+                        child: Icon(
+                          Icons.coffee,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
                       onTap: () {
                         setState(() {
                           _selectedCafeId = cafe['id'].toString();
@@ -561,7 +624,28 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.deepOrange, size: 22),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showSnackBar(String m) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(m), behavior: SnackBarBehavior.floating),
+    SnackBar(
+      content: Text(m),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: Colors.black87,
+    ),
   );
 }

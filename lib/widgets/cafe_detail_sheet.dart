@@ -86,6 +86,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   Future<List<Map<String, dynamic>>> _fetchComments() async {
     try {
+      print("Sorgulanan Cafe ID: ${widget.cafe.id}");
       final response = await supabase
           .from('cafe_yorumlar')
           .select('*, profiles!cafe_yorumlar_kullanici_id_fkey (username)')
@@ -495,6 +496,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   Widget _buildCommentList() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _fetchComments(),
+
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
