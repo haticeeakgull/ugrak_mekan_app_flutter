@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart'; // Paket eklendi
 import 'package:ugrak_mekan_app/views/collection_detail_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/api_service.dart';
 import '../services/supabase_service.dart';
 import '../models/cafe_model.dart';
@@ -157,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         centerTitle: true, // 1. Bu satırı ekleyerek başlık alanını ortalıyoruz

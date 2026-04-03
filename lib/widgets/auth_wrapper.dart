@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import "package:ugrak_mekan_app/views/auth_screen.dart";
 import "package:ugrak_mekan_app/views/home_screen.dart";
 import 'package:ugrak_mekan_app/views/main_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -15,7 +16,7 @@ class AuthWrapper extends StatelessWidget {
       builder: (context, snapshot) {
         // Eğer veri henüz gelmediyse yükleme ikonu göster
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
+          return const AppScaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/explore_screen.dart';
 import 'package:ugrak_mekan_app/views/home_screen.dart';
 import 'package:ugrak_mekan_app/views/user_profile_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../widgets/badge_alert.dart';
 
 class MainScreen extends StatefulWidget {
@@ -85,7 +86,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

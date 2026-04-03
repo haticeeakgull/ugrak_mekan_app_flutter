@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import 'package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart';
 import '../models/cafe_model.dart';
 import 'user_profile_screen.dart';
@@ -185,7 +186,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
     return GestureDetector(
       onTap: _closeSearch,
-      child: Scaffold(
+      child: AppScaffold(
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 // Kendi dosya yoluna göre bu importu kontrol et:
 import "package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart";
 import 'package:ugrak_mekan_app/models/cafe_model.dart';
@@ -59,7 +60,7 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       appBar: AppBar(
         title: Text(
           widget.collectionName,

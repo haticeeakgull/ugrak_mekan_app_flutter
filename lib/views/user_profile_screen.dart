@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/follow_list_screen.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/collection_service.dart';
 import '../services/follow_service.dart';
 import '../widgets/share_sheet.dart';
@@ -106,7 +107,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => Scaffold(
+        builder: (context) => AppScaffold(
           backgroundColor: Colors.black,
           appBar: AppBar(
             backgroundColor: Colors.black,

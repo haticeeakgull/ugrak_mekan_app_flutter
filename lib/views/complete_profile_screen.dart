@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart'; // Yeni import
+import 'package:image_cropper/image_cropper.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart'; // Yeni import
 
 class CompleteProfileScreen extends StatefulWidget {
   const CompleteProfileScreen({super.key});
@@ -197,7 +198,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         ? Colors.blueAccent
         : Colors.deepOrange;
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text(

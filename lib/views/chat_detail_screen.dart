@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:ugrak_mekan_app/views/collection_detail_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;
@@ -107,7 +108,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: const Color.fromARGB(255, 255, 254, 254),
       appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 249, 248, 248),

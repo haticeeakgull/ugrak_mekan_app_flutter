@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/follow_service.dart';
 import 'user_profile_screen.dart';
 
@@ -19,7 +20,7 @@ class FollowListScreen extends StatelessWidget {
     return DefaultTabController(
       initialIndex: initialIndex,
       length: 2,
-      child: Scaffold(
+      child: AppScaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,

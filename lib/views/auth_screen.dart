@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -114,7 +115,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: Colors.white,
       body: Center(
         child: SingleChildScrollView(

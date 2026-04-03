@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ugrak_mekan_app/views/create_post_screen.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../models/cafe_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -320,7 +321,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        return Scaffold(
+        return AppScaffold(
           backgroundColor: Colors.transparent,
           resizeToAvoidBottomInset: true,
           body: Container(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import 'package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart';
 import '../models/cafe_model.dart';
 
@@ -15,7 +16,7 @@ class MapScreen extends StatelessWidget {
     print(
       "Harita yükleniyor. Koordinatlar: ${odaklanilacakKafe?.latitude}, ${odaklanilacakKafe?.longitude}",
     );
-    return Scaffold(
+    return AppScaffold(
       appBar: AppBar(title: const Text("Mekan Keşfi")),
       body: FlutterMap(
         options: MapOptions(

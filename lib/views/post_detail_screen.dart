@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/create_post_screen.dart';
+import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final List<Map<String, dynamic>> allPosts;
@@ -34,7 +35,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: Colors.black,
       body: PageView.builder(
         controller: _verticalController,
