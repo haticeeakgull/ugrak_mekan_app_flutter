@@ -305,7 +305,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   "İçeriklerini sadece takipçilerin görebilir.",
                 ),
                 value: _isPrivate,
-                activeColor: Colors.blueAccent,
+                activeThumbColor: Colors.blueAccent,
                 secondary: Icon(
                   _isPrivate ? Icons.lock_outline : Icons.lock_open,
                   color: themeColor,

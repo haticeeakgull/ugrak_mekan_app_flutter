@@ -156,8 +156,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   .eq('chat_id', widget.chatId)
                   .order('created_at', ascending: false),
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 final messages = snapshot.data!;
 
                 return ListView.builder(
@@ -316,8 +317,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       builder: (context) => FutureBuilder(
         future: _supabase.from('koleksiyonlar').select().eq('user_id', myId),
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
           final collections = snapshot.data as List;
 
           return ListView.builder(

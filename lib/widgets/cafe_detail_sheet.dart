@@ -499,11 +499,13 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       future: _fetchComments(),
 
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
         final comments = snapshot.data ?? [];
-        if (comments.isEmpty)
+        if (comments.isEmpty) {
           return const Center(child: Text("Henüz yorum yok."));
+        }
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: comments.length,
@@ -690,7 +692,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
               .toList();
           allImages.addAll(postImages);
         }
-        if (allImages.isEmpty)
+        if (allImages.isEmpty) {
           return const SizedBox(
             height: 140,
             child: Center(
@@ -700,6 +702,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
               ),
             ),
           );
+        }
         return SizedBox(
           height: 140,
           child: ListView.builder(

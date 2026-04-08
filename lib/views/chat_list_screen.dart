@@ -136,8 +136,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     .eq('status', 'following'),
                 builder: (context, AsyncSnapshot snap) {
                   // Burada basitleştirmek için takipçilerini listeliyoruz
-                  if (!snap.hasData)
+                  if (!snap.hasData) {
                     return const Center(child: CircularProgressIndicator());
+                  }
                   final List followers = snap.data;
 
                   return ListView.builder(

@@ -135,8 +135,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _handleSearch() async {
     if (_searchController.text.isEmpty &&
         _secilenSemt == null &&
-        _secilenVibe == null)
+        _secilenVibe == null) {
       return;
+    }
     setState(() => _isLoading = true);
     try {
       final results = await _apiService.searchCafes(

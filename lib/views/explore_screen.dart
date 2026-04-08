@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // gmaps alias kaldırıldı
+import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
@@ -19,71 +19,90 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
-  final MapController _mapController = MapController();
-  final PageController _pageController = PageController(viewportFraction: 0.85);
+  final PageController _pageController = PageController(viewportFraction: 0.88);
   final FocusNode _searchFocusNode = FocusNode();
+
+  GoogleMapController? _mapController;
 
   List<Map<String, dynamic>> _searchResults = [];
   List<dynamic> _kafeler = [];
-  // Tip güvenliği için List<Map<String, dynamic>> olarak tanımlıyoruz
   List<Map<String, dynamic>> _tumOneriPostlari = [];
-  List<Marker> _markers = [];
+  Set<Marker> _markers = {};
 
   bool _isMapLoading = true;
   bool _showCafeCards = false;
   int _currentCafeIndex = 0;
+  LatLng _userLocation = const LatLng(38.4237, 27.1428); // Varsayılan İzmir
 
   @override
   void initState() {
     super.initState();
-    _fetchKafeler();
+    _initializeScreen();
     _searchFocusNode.addListener(() {
       if (mounted) setState(() {});
     });
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    _pageController.dispose();
-    super.dispose();
+  Future<void> _initializeScreen() async {
+    await _determinePosition();
+    await _fetchNearbyKafeler();
   }
 
-  Future<void> _fetchKafeler() async {
+  // --- KONUM SERVİSİ ---
+  Future<void> _determinePosition() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      _showSnackBar("Lütfen konum servisini açın.");
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    if (mounted) {
+      setState(() {
+        _userLocation = LatLng(position.latitude, position.longitude);
+      });
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(_userLocation, 14.5),
+      );
+    }
+  }
+
+  // --- SUPABASE VERİ ÇEKME ---
+  Future<void> _fetchNearbyKafeler() async {
     try {
-      // 1. !inner takısını sildik ki postu olmayan kafeler de gelsin.
-      // 2. Filtreyi doğrudan select içinde parantez içinde belirttik.
-      final data = await supabase
+      final List<dynamic> data = await supabase.rpc(
+        'get_nearby_cafes',
+        params: {
+          'user_lat': _userLocation.latitude,
+          'user_long': _userLocation.longitude,
+          'radius_km': 30.0,
+        },
+      );
+
+      if (data.isEmpty) {
+        if (mounted) setState(() => _isMapLoading = false);
+        return;
+      }
+
+      final fullData = await supabase
           .from('ilce_isimli_kafeler')
-          .select('''
-        *,
-        cafe_postlar (
-          *,
-          profiles!inner (username, is_private),
-          ilce_isimli_kafeler (kafe_adi) 
-        )
-      ''')
-          .filter('cafe_postlar.profiles.is_private', 'eq', false);
-      // .filter kullanarak 'soft' bir filtreleme yapıyoruz.
+          .select('*, cafe_postlar(*, profiles(username, is_private))')
+          .inFilter('id', data.map((e) => e['id']).toList());
 
       if (mounted) {
         setState(() {
-          _kafeler = data;
-
-          // Postları ayrıştırırken hata almamak için boş liste kontrolü ekliyoruz
-          _tumOneriPostlari = _kafeler.expand((cafe) {
-            final posts = cafe['cafe_postlar'] as List? ?? [];
-            return posts.map((post) {
-              final postMap = Map<String, dynamic>.from(post);
-              if (postMap['ilce_isimli_kafeler'] == null) {
-                postMap['ilce_isimli_kafeler'] = {'kafe_adi': cafe['kafe_adi']};
-              }
-              return postMap;
-            });
-          }).toList()..shuffle();
-
-          _updateMarkers(); // Haritadaki imleçleri tekrar çiz
+          _kafeler = fullData;
+          _prepareDiscoveryPosts();
+          _updateGoogleMarkers();
           _isMapLoading = false;
         });
       }
@@ -93,41 +112,53 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
   }
 
-  void _updateMarkers() {
-    if (_kafeler.isEmpty) return;
-    final double currentZoom = _mapController.camera.zoom;
+  void _prepareDiscoveryPosts() {
+    List<Map<String, dynamic>> tempPosts = [];
+    for (var cafe in _kafeler) {
+      final posts = cafe['cafe_postlar'] as List? ?? [];
+      for (var post in posts) {
+        if (post['profiles']?['is_private'] == false) {
+          final postMap = Map<String, dynamic>.from(post);
+          postMap['kafe_adi'] = cafe['kafe_adi'];
+          tempPosts.add(postMap);
+        }
+      }
+    }
+    _tumOneriPostlari = tempPosts..shuffle();
+  }
 
-    _markers = _kafeler.asMap().entries.map((entry) {
-      int i = entry.key;
-      var cafe = entry.value;
+  void _updateGoogleMarkers() {
+    Set<Marker> newMarkers = {};
+    for (int i = 0; i < _kafeler.length; i++) {
+      var cafe = _kafeler[i];
       bool isSelected = i == _currentCafeIndex && _showCafeCards;
 
-      return Marker(
-        point: LatLng(cafe['latitude'] ?? 0.0, cafe['longitude'] ?? 0.0),
-        width: isSelected ? 100 : 80,
-        height: 40,
-        child: GestureDetector(
+      newMarkers.add(
+        Marker(
+          markerId: MarkerId(cafe['id'].toString()),
+          position: LatLng(cafe['latitude'], cafe['longitude']),
+          // KÜMELEME İÇİN KRİTİK: clusterManagerId atıyoruz
+          clusterManagerId: const ClusterManagerId("cafe_cluster"),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            isSelected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueRed,
+          ),
           onTap: () {
             _closeSearch();
             setState(() {
               _showCafeCards = true;
               _currentCafeIndex = i;
-              _updateMarkers();
+              _updateGoogleMarkers();
             });
-            _pageController.jumpToPage(i);
-            _mapController.move(
-              LatLng(cafe['latitude'], cafe['longitude']),
-              15,
+            _pageController.animateToPage(
+              i,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeInOutQuart,
             );
           },
-          child: _buildSmartMarker(
-            cafe['kafe_adi'] ?? "",
-            isSelected,
-            currentZoom,
-          ),
         ),
       );
-    }).toList();
+    }
+    setState(() => _markers = newMarkers);
   }
 
   void _closeSearch() {
@@ -136,52 +167,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (mounted) setState(() => _searchResults = []);
   }
 
-  Widget _buildSmartMarker(String name, bool isSelected, double zoom) {
-    if (zoom < 14.0 && !isSelected) {
-      return Center(
-        child: Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.deepOrange, width: 2),
-          ),
-        ),
-      );
-    }
-    return Center(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        constraints: const BoxConstraints(maxWidth: 90),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.black : Colors.white.withOpacity(0.95),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
-          border: Border.all(
-            color: isSelected ? Colors.black : Colors.grey.shade300,
-          ),
-        ),
-        child: Text(
-          name,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black87,
-            fontSize: 9,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    final bool isKeyboardOpen = keyboardHeight > 0;
+    final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
     final bool isSearchActive = _searchFocusNode.hasFocus;
 
     return GestureDetector(
@@ -191,77 +179,82 @@ class _ExploreScreenState extends State<ExploreScreen> {
         body: Stack(
           children: [
             _isMapLoading
-                ? const Center(child: CircularProgressIndicator())
-                : FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: const LatLng(39.9042, 32.8597),
-                      initialZoom: 13,
-                      onTap: (_, __) => _closeSearch(),
-                      onPositionChanged: (position, hasGesture) {
-                        if (hasGesture) setState(() => _updateMarkers());
-                      },
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.deepOrange),
+                  )
+                : GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: _userLocation,
+                      zoom: 14,
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                        subdomains: const ['a', 'b', 'c', 'd'],
+                    onMapCreated: (controller) => _mapController = controller,
+                    markers: _markers,
+                    // GOOGLE NATIVE CLUSTERING AYARLARI
+                    clusterManagers: {
+                      ClusterManager(
+                        clusterManagerId: const ClusterManagerId(
+                          "cafe_cluster",
+                        ),
+                        onClusterTap: (cluster) {
+                          _mapController?.animateCamera(
+                            CameraUpdate.newLatLngZoom(cluster.position, 16),
+                          );
+                        },
                       ),
-                      MarkerLayer(markers: _markers),
-                    ],
+                    },
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    onTap: (_) {
+                      _closeSearch();
+                      setState(() => _showCafeCards = false);
+                    },
                   ),
 
             if (isSearchActive)
               BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: Container(color: Colors.black.withOpacity(0)),
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(color: Colors.black.withOpacity(0.15)),
               ),
 
-            if (!isKeyboardOpen && !isSearchActive) ...[
-              if (_showCafeCards && _kafeler.isNotEmpty)
-                Positioned(
-                  bottom: 20,
-                  left: 0,
-                  right: 0,
-                  child: SizedBox(
-                    height: 280,
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: _kafeler.length,
-                      onPageChanged: (index) {
-                        setState(() {
-                          _currentCafeIndex = index;
-                          _updateMarkers();
-                        });
-                        _mapController.move(
+            // --- KAFE KARTLARI ---
+            if (!isKeyboardOpen &&
+                !isSearchActive &&
+                _showCafeCards &&
+                _kafeler.isNotEmpty)
+              Positioned(
+                bottom: 30,
+                left: 0,
+                right: 0,
+                child: SizedBox(
+                  height: 280,
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: _kafeler.length,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentCafeIndex = index;
+                        _updateGoogleMarkers();
+                      });
+                      _mapController?.animateCamera(
+                        CameraUpdate.newLatLng(
                           LatLng(
                             _kafeler[index]['latitude'],
                             _kafeler[index]['longitude'],
                           ),
-                          15,
-                        );
-                      },
-                      itemBuilder: (context, index) =>
-                          _buildCafeCard(_kafeler[index]),
-                    ),
+                        ),
+                      );
+                    },
+                    itemBuilder: (context, index) =>
+                        _buildCafeCard(_kafeler[index]),
                   ),
                 ),
+              ),
 
-              if (_showCafeCards)
-                Positioned(
-                  right: 20,
-                  bottom: 310,
-                  child: FloatingActionButton(
-                    mini: true,
-                    backgroundColor: Colors.white,
-                    onPressed: () => setState(() => _showCafeCards = false),
-                    child: const Icon(Icons.close, color: Colors.black),
-                  ),
-                ),
-
-              if (!_showCafeCards) _buildDiscoverySheet(),
-            ],
+            // --- KEŞİF PANELİ ---
+            if (!isKeyboardOpen && !isSearchActive && !_showCafeCards)
+              _buildDiscoverySheet(),
 
             _buildSearchOverlay(isKeyboardOpen),
           ],
@@ -270,26 +263,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  // --- DİĞER UI BİLEŞENLERİ (Öncekiyle Aynı, Mantık Korundu) ---
+  // (Buradaki _buildDiscoverySheet, _buildCafeCard vb. metodlar senin kodunla aynıdır)
+
   Widget _buildDiscoverySheet() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.12,
-      minChildSize: 0.08,
+      initialChildSize: 0.14,
+      minChildSize: 0.14,
       maxChildSize: 0.95,
       snap: true,
+      snapSizes: const [0.14, 0.95],
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            boxShadow: [
-              BoxShadow(color: Colors.black12, blurRadius: 15, spreadRadius: 5),
-            ],
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
           ),
           child: Column(
             children: [
-              const SizedBox(height: 12),
+              const SizedBox(height: 15),
               Container(
-                width: 45,
+                width: 50,
                 height: 5,
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
@@ -297,27 +292,27 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 ),
               ),
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
+                padding: EdgeInsets.symmetric(vertical: 20),
                 child: Text(
                   "Sana Özel Keşifler",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
                 ),
               ),
               Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  padding: EdgeInsets.zero,
-                  itemCount: _tumOneriPostlari.length,
-                  itemBuilder: (context, index) {
-                    final post = _tumOneriPostlari[index];
-                    // 'index' değerini metoda parametre olarak geçiyoruz
-                    return _buildDiscoveryPostItem(post, index);
-                  },
-                ),
+                child: _tumOneriPostlari.isEmpty
+                    ? const Center(
+                        child: Text("Yakınlarda keşfedilecek bir şey yok."),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.only(bottom: 120),
+                        itemCount: _tumOneriPostlari.length,
+                        itemBuilder: (context, index) =>
+                            _buildDiscoveryPostItem(
+                              _tumOneriPostlari[index],
+                              index,
+                            ),
+                      ),
               ),
             ],
           ),
@@ -326,13 +321,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  // index parametresi eklendi
   Widget _buildDiscoveryPostItem(Map<String, dynamic> post, int index) {
-    final String kullaniciAdi = post['profiles']?['username'] ?? 'Anonim';
-
+    final String username = post['profiles']?['username'] ?? 'Anonim';
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      height: 480,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 25),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(30),
         child: Stack(
@@ -341,7 +334,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Image.network(
               post['foto_url'] ?? "",
               fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => Container(color: Colors.grey[200]),
+              errorBuilder: (c, e, s) => Container(color: Colors.grey[100]),
             ),
             Container(
               decoration: BoxDecoration(
@@ -349,15 +342,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.1),
+                    Colors.black12,
                     Colors.transparent,
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withOpacity(0.9),
                   ],
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(25),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,12 +358,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   Row(
                     children: [
                       CircleAvatar(
-                        radius: 18,
+                        radius: 16,
                         backgroundColor: Colors.deepOrange,
                         child: Text(
-                          kullaniciAdi.isNotEmpty
-                              ? kullaniciAdi[0].toUpperCase()
-                              : "A",
+                          username[0].toUpperCase(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -379,73 +370,47 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        kullaniciAdi,
+                        username,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Text(
                     post['baslik'] ?? "",
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 24,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    post['icerik'] ?? "",
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    post['kafe_adi'] ?? "",
+                    style: const TextStyle(color: Colors.white70, fontSize: 15),
                   ),
                   const SizedBox(height: 15),
-                  GestureDetector(
-                    onTap: () async {
-                      // Sayfaya git ve dönmesini bekle
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PostDetailScreen(
-                            allPosts: _tumOneriPostlari,
-                            initialIndex: index,
-                          ),
-                        ),
-                      );
-                      // Sayfadan geri dönüldüğünde (düzenleme yapılmış olabilir) listeyi tekrar çek
-                      _fetchKafeler();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            "Detayları İncele",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ],
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white24,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
                       ),
                     ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (c) => PostDetailScreen(
+                          allPosts: _tumOneriPostlari,
+                          initialIndex: index,
+                        ),
+                      ),
+                    ),
+                    child: const Text("Detayları İncele"),
                   ),
                 ],
               ),
@@ -459,21 +424,25 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildCafeCard(dynamic cafeData) {
     final List<dynamic> postlar = cafeData['cafe_postlar'] ?? [];
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      margin: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
         ],
       ),
       child: Column(
         children: [
           Expanded(
-            flex: 12,
+            flex: 3,
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(22),
+                top: Radius.circular(25),
               ),
               child: postlar.isNotEmpty
                   ? Image.network(
@@ -481,46 +450,52 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       fit: BoxFit.cover,
                       width: double.infinity,
                     )
-                  : const Icon(Icons.local_cafe, size: 50),
+                  : const Center(
+                      child: Icon(
+                        Icons.local_cafe,
+                        size: 50,
+                        color: Colors.grey,
+                      ),
+                    ),
             ),
           ),
           Expanded(
-            flex: 10,
-            child: InkWell(
-              onTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) =>
-                    CafeDetailSheet(cafe: Cafe.fromJson(cafeData)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cafeData['kafe_adi'] ?? "",
-                      style: const TextStyle(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    cafeData['kafe_adi'] ?? "",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    maxLines: 1,
+                  ),
+                  Text(
+                    "${cafeData['ilce'] ?? ''} • Cafe",
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  InkWell(
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) =>
+                          CafeDetailSheet(cafe: Cafe.fromJson(cafeData)),
+                    ),
+                    child: const Text(
+                      "Tüm Detayları Gör →",
+                      style: TextStyle(
+                        color: Colors.deepOrange,
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    const Center(
-                      child: Text(
-                        "Detayları Gör",
-                        style: TextStyle(
-                          color: Colors.deepOrange,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -532,11 +507,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildSearchOverlay(bool isKeyboardOpen) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
         child: Column(
           children: [
             Material(
-              elevation: 8,
+              elevation: 10,
+              shadowColor: Colors.black26,
               borderRadius: BorderRadius.circular(30),
               child: TextField(
                 controller: _searchController,
@@ -561,15 +537,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
             if (_searchResults.isNotEmpty)
               Container(
-                margin: const EdgeInsets.only(top: 8),
-                constraints: BoxConstraints(
-                  maxHeight: isKeyboardOpen
-                      ? MediaQuery.of(context).size.height * 0.3
-                      : MediaQuery.of(context).size.height * 0.4,
-                ),
+                margin: const EdgeInsets.only(top: 10),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 10),
+                  ],
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
@@ -579,7 +553,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     return ListTile(
                       leading: const CircleAvatar(
                         backgroundColor: Colors.deepOrange,
-                        child: Icon(Icons.person, color: Colors.white),
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                       title: Text(user['username'] ?? "Anonim"),
                       onTap: () {
@@ -587,7 +565,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
+                            builder: (c) =>
                                 UserProfileScreen(targetUserId: user['id']),
                           ),
                         );
@@ -604,16 +582,31 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Future<void> _searchUsers(String query) async {
     if (query.isEmpty) {
-      if (mounted) setState(() => _searchResults = []);
+      setState(() => _searchResults = []);
       return;
     }
-    final results = await supabase
-        .from('profiles')
-        .select()
-        .ilike('username', '%$query%')
-        .limit(10);
-    if (mounted) {
-      setState(() => _searchResults = List<Map<String, dynamic>>.from(results));
+    try {
+      final res = await supabase
+          .from('profiles')
+          .select()
+          .ilike('username', '%$query%')
+          .limit(8);
+      if (mounted)
+        setState(() => _searchResults = List<Map<String, dynamic>>.from(res));
+    } catch (e) {
+      debugPrint("Arama hatası: $e");
     }
+  }
+
+  void _showSnackBar(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _pageController.dispose();
+    _mapController?.dispose();
+    super.dispose();
   }
 }

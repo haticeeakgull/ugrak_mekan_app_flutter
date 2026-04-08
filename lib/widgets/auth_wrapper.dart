@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import "package:ugrak_mekan_app/views/auth_screen.dart";
-import "package:ugrak_mekan_app/views/home_screen.dart";
 import 'package:ugrak_mekan_app/views/main_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 

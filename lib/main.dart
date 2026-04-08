@@ -8,15 +8,16 @@ import 'package:ugrak_mekan_app/views/main_screen.dart';
 import "package:ugrak_mekan_app/views/user_profile_screen.dart";
 
 void main() async {
+  // Flutter motorunun hazır olduğundan emin oluyoruz
   WidgetsFlutterBinding.ensureInitialized();
 
-  // .env yükle
+  // .env dosyasını yüklüyoruz (Tüm API anahtarları burada olmalı)
   await dotenv.load(fileName: ".env");
 
-  // Supabase başlat
+  // Supabase başlatma (EXPO_PUBLIC ön eklerini .env dosyanla eşleşecek şekilde korudum)
   await Supabase.initialize(
-    url: dotenv.env['EXPO_PUBLIC_SUPABASE_URL']!,
-    anonKey: dotenv.env['EXPO_PUBLIC_SUPABASE_ANON_KEY']!,
+    url: dotenv.env['EXPO_PUBLIC_SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
   );
 
   runApp(const MyApp());
@@ -31,10 +32,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Uğrak',
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.deepOrange),
-      // Uygulama ilk açıldığında login kontrolü yapan wrapper
       home: const AuthWrapper(),
-
-      // Sayfalar arası yönlendirme tanımları (Routes)
       routes: {
         '/main': (context) => const MainScreen(),
         '/home': (context) => const HomeScreen(),

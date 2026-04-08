@@ -15,8 +15,8 @@ class AppScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.backgroundColor,
     this.resizeToAvoidBottomInset, // 2. Constructor'a ekle
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {

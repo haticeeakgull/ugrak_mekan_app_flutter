@@ -31,8 +31,9 @@ void showAdvancedShareSheet(
             child: FutureBuilder<List<dynamic>>(
               future: supabase.from('profiles').select().limit(10),
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 return ListView.builder(
                   controller: scrollController,
                   itemCount: snapshot.data!.length,

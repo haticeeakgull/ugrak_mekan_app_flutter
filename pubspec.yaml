@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
   supabase_flutter: ^2.0.0
   http: ^1.1.0
-  flutter_dotenv: ^5.1.0
+  flutter_dotenv: ^6.0.0
   google_fonts: ^6.1.0
   cupertino_icons: ^1.0.8
   flutter_map: ^6.1.0
@@ -45,6 +45,9 @@ dependencies:
   image_cropper: ^7.0.0
   path_provider: ^2.1.2
   flutter_animate: ^4.5.0
+  google_maps_flutter: ^2.6.0
+
+  geolocator: 10.1.0
 
 dev_dependencies:
   flutter_test:
@@ -103,3 +106,4 @@ flutter_launcher_icons:
   image_path: "assets/images/logo.png" # Logonun gerçek yolu
   adaptive_icon_background: "#FFFFFF" # Android için arka plan rengi
   adaptive_icon_foreground: "assets/images/logo.png" # Android "Adaptive" ikon desteği
+

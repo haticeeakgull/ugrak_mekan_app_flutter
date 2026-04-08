@@ -47,7 +47,7 @@ class CafeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Sadece postun sahibi silsin istiyorsan bu kontrolü kullanabilirsin
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final bool isOwner = cafe.user_id == currentUserId;
+    final bool isOwner = cafe.userId == currentUserId;
 
     return Card(
       elevation: 3,
