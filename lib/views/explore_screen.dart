@@ -26,7 +26,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   List<Map<String, dynamic>> _searchResults = [];
   List<dynamic> _kafeler = [];
-  List<Map<String, dynamic>> _tumOneriPostlari = [];
+  List<Map<String, dynamic>>? _tumOneriPostlari;
   Set<Marker> _markers = {};
 
   bool _isMapLoading = true;
@@ -76,52 +76,97 @@ class _ExploreScreenState extends State<ExploreScreen> {
   // Latency ve görünmeme sorununu çözen ana fonksiyon
   Future<void> _fetchKafeler() async {
     try {
-      final res = await supabase
-          .from('ilce_isimli_kafeler')
-          .select('*, cafe_gorselleri(*)');
+      List<dynamic> allKafeler = [];
+      int from = 0;
+      int to = 999;
+      bool hasMore = true;
 
-      // 1. ADIM: Ham veri geliyor mu?
-      print("DEBUG: Supabase'den gelen veri: $res");
+      // Tüm veriler bitene kadar 1000'er 1000'er çekiyoruz
+      while (hasMore) {
+        final res = await supabase
+            .from('ilce_isimli_kafeler')
+            .select('''
+            *,
+            cafe_gorselleri(*),
+            cafe_postlar (
+              *,
+              profiles (*)
+            )
+          ''')
+            .range(from, to);
 
-      if (res == null || res.isEmpty) {
-        print(
-          "DEBUG: Veritabanından boş sonuç döndü! RLS veya tabloyu kontrol et.",
-        );
+        if (res != null && res.isNotEmpty) {
+          allKafeler.addAll(res);
+
+          // Eğer gelen veri 1000'den azsa, çekilecek başka veri kalmamıştır
+          if (res.length < 1000) {
+            hasMore = false;
+          } else {
+            from += 1000;
+            to += 1000;
+          }
+        } else {
+          hasMore = false;
+        }
       }
 
-      if (res != null && mounted) {
+      if (mounted) {
+        // Debug: Kaç tane geldiğini buradan teyit et
+        debugPrint(
+          "DEBUG: Veritabanından toplam ${allKafeler.length} kafe çekildi.",
+        );
+
         setState(() {
-          _kafeler = res;
+          _kafeler = allKafeler;
           _isMapLoading = false;
         });
 
-        // 2. ADIM: Marker hazırlığı başlıyor mu?
-        print(
-          "DEBUG: ${_kafeler.length} adet kafe için markerlar hazırlanıyor...",
-        );
         _prepareDiscoveryPosts();
         _updateGoogleMarkers();
       }
     } catch (e) {
-      print("DEBUG: Hata oluştu: $e");
+      debugPrint("DEBUG: Çekme hatası: $e");
       if (mounted) setState(() => _isMapLoading = false);
     }
   }
 
   void _prepareDiscoveryPosts() {
     List<Map<String, dynamic>> tempPosts = [];
+
+    print("DEBUG: Toplam ${_kafeler.length} adet kafe taranıyor...");
+
     for (var cafe in _kafeler) {
+      // 1. İlişki adının doğruluğundan emin ol (PostgreSQL'deki tablo adı veya foreign key)
       final posts = cafe['cafe_postlar'] as List? ?? [];
+
+      if (posts.isEmpty) {
+        print("DEBUG: ${cafe['kafe_adi']} için hiç post bulunamadı.");
+      }
+
       for (var post in posts) {
-        if (post['profiles'] != null &&
-            post['profiles']?['is_private'] == false) {
+        // 2. Kontrolü esnetiyoruz: Profile null değilse ve gizli değilse (veya gizlilik set edilmemişse)
+        final profile = post['profiles'];
+        bool isVisible =
+            profile != null &&
+            (profile['is_private'] == false || profile['is_private'] == null);
+
+        if (isVisible) {
           final postMap = Map<String, dynamic>.from(post);
-          postMap['kafe_adi'] = cafe['kafe_adi'];
+          postMap['kafe_adi'] = cafe['kafe_adi']; // Kafe adını ekle
           tempPosts.add(postMap);
+        } else {
+          print(
+            "DEBUG: Bir post gizlilik ayarı veya eksik profil nedeniyle atlandı.",
+          );
         }
       }
     }
+
+    print("DEBUG: Toplam ${tempPosts.length} post keşif için hazırlandı.");
+
     setState(() {
+      // Eğer tempPosts boşsa bile [] set et ki loading sönüp "Bulunamadı" desin
+      // Eğer doluysa shuffle yapıp gösterir
       _tumOneriPostlari = tempPosts..shuffle();
     });
   }
@@ -130,46 +175,55 @@ class _ExploreScreenState extends State<ExploreScreen> {
     Set<Marker> newMarkers = {};
     for (int i = 0; i < _kafeler.length; i++) {
       var cafe = _kafeler[i];
-      if (cafe['latitude'] == null || cafe['longitude'] == null) continue;
 
-      bool isSelected = i == _currentCafeIndex && _showCafeCards;
+      // Koordinat null ise atla
+      if (cafe['latitude'] == null || cafe['longitude'] == null) {
+        debugPrint("DEBUG: ${cafe['kafe_adi']} için koordinat yok!");
+        continue;
+      }
 
-      newMarkers.add(
-        Marker(
-          markerId: MarkerId(cafe['id'].toString()),
-          position: LatLng(
-            double.parse(cafe['latitude'].toString()),
-            double.parse(cafe['longitude'].toString()),
-          ),
-          clusterManagerId: const ClusterManagerId("cafe_cluster"),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            isSelected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueRed,
-          ),
-          onTap: () {
-            _closeSearch();
-            setState(() {
-              _currentCafeIndex = i;
-              _showCafeCards = true;
-            });
-            _updateGoogleMarkers();
+      try {
+        double lat = double.parse(cafe['latitude'].toString());
+        double lng = double.parse(cafe['longitude'].toString());
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_pageController.hasClients) {
-                _pageController.jumpToPage(i);
-              }
-            });
+        bool isSelected = i == _currentCafeIndex && _showCafeCards;
 
-            _mapController?.animateCamera(
-              CameraUpdate.newLatLng(
-                LatLng(
-                  double.parse(cafe['latitude'].toString()),
-                  double.parse(cafe['longitude'].toString()),
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId(cafe['id'].toString()),
+            position: LatLng(lat, lng),
+            clusterManagerId: const ClusterManagerId("cafe_cluster"),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              isSelected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueRed,
+            ),
+            onTap: () {
+              _closeSearch();
+              setState(() {
+                _currentCafeIndex = i;
+                _showCafeCards = true;
+              });
+              _updateGoogleMarkers();
+
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_pageController.hasClients) {
+                  _pageController.jumpToPage(i);
+                }
+              });
+
+              _mapController?.animateCamera(
+                CameraUpdate.newLatLng(
+                  LatLng(
+                    double.parse(cafe['latitude'].toString()),
+                    double.parse(cafe['longitude'].toString()),
+                  ),
                 ),
-              ),
-            );
-          },
-        ),
-      );
+              );
+            },
+          ),
+        );
+      } catch (e) {
+        debugPrint("DEBUG: ${cafe['kafe_adi']} koordinat parse hatası: $e");
+      }
     }
     setState(() => _markers = newMarkers);
   }
@@ -442,19 +496,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 ),
               ),
               Expanded(
-                child: _tumOneriPostlari.isEmpty
+                child: _tumOneriPostlari == null
                     ? const Center(
                         child: CircularProgressIndicator(
                           color: Colors.deepOrange,
                         ),
                       )
+                    : _tumOneriPostlari!.isEmpty
+                    ? const Center(
+                        child: Text("Henüz keşfedilecek post bulunamadı."),
+                      )
                     : ListView.builder(
                         controller: scrollController,
+                        // Null safety için ! kullandık çünkü yukarıda kontrol ettik
                         padding: const EdgeInsets.only(bottom: 120),
-                        itemCount: _tumOneriPostlari.length,
+                        itemCount: _tumOneriPostlari!.length,
                         itemBuilder: (context, index) =>
                             _buildDiscoveryPostItem(
-                              _tumOneriPostlari[index],
+                              _tumOneriPostlari![index],
                               index,
                             ),
                       ),
@@ -467,7 +526,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Widget _buildDiscoveryPostItem(Map<String, dynamic> post, int index) {
-    final String username = post['profiles']?['username'] ?? 'Anonim';
+    // Post içindeki profilden username çekme (Eğer null gelirse Anonim yaz)
+    final String username = post['profiles'] != null
+        ? post['profiles']['username'] ?? 'Anonim'
+        : 'Anonim';
+
     return Container(
       height: 480,
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 25),
@@ -506,7 +569,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         radius: 16,
                         backgroundColor: Colors.deepOrange,
                         child: Text(
-                          username[0].toUpperCase(),
+                          username.isNotEmpty ? username[0].toUpperCase() : '?',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -546,15 +609,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (c) => PostDetailScreen(
-                          allPosts: _tumOneriPostlari,
-                          initialIndex: index,
-                        ),
-                      ),
-                    ),
+                    onPressed: () {
+                      if (_tumOneriPostlari != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (c) => PostDetailScreen(
+                              allPosts: _tumOneriPostlari!,
+                              initialIndex: index,
+                            ),
+                          ),
+                        );
+                      }
+                    },
                     child: const Text("Detayları İncele"),
                   ),
                 ],
