@@ -1,8 +1,5 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-/// Uğrak Mekan uygulaması için Cafe model sınıfı.
-/// Artık Google Maps'in yerleşik kümeleme özelliğini kullandığımız için
-/// herhangi bir sınıftan (ClusterItem vb.) türetilmesine gerek yoktur.
 class Cafe {
   final String id;
   final String kafeAdi;
@@ -13,7 +10,8 @@ class Cafe {
   final double latitude;
   final double longitude;
   final double similarity;
-  final List<String> fotograflar;
+  // String listesi yerine artık detaylı bir Map listesi tutuyoruz
+  final List<Map<String, dynamic>> gorseller;
   final List<Map<String, dynamic>> yorumlar;
   final List<Map<String, dynamic>> postlar;
 
@@ -27,37 +25,48 @@ class Cafe {
     required this.latitude,
     required this.longitude,
     required this.similarity,
-    required this.fotograflar,
+    required this.gorseller,
     required this.yorumlar,
     required this.postlar,
   });
 
-  /// Harita üzerinde işaretçi (Marker) oluştururken kolaylık sağlaması için getter.
   LatLng get location => LatLng(latitude, longitude);
 
-  /// Supabase veya yerel JSON verisini model nesnesine dönüştürür.
   factory Cafe.fromJson(Map<String, dynamic> json) {
-    // Postların farklı tablo/key isimleriyle gelme ihtimalini yönetiyoruz.
-    final postList = json['cafe_postlar'] ?? json['postlar'] ?? [];
+    // 1. Yeni tablodan gelen veriyi alıyoruz
+    final gorselList = List<Map<String, dynamic>>.from(
+      json['cafe_gorselleri'] ?? [],
+    );
+
+    // 2. Eğer yeni tablo boşsa (henüz geçiş aşamasındaysan) eski 'fotograflar'ı Map'e çevirerek koruyalım
+    if (gorselList.isEmpty && json['fotograflar'] != null) {
+      for (var url in json['fotograflar']) {
+        gorselList.add({
+          'foto_url': url,
+          'kaynak_tipi': 'official',
+          'oncelik_sirasi': 0,
+        });
+      }
+    }
 
     return Cafe(
       id: json['id']?.toString() ?? '',
       kafeAdi: json['kafe_adi'] ?? 'Bilinmeyen Mekan',
       userId: json['user_id']?.toString(),
-      // 'ilce_adi' yoksa 'ilce' kolonuna bakıyoruz.
       ilceAdi: json['ilce_adi'] ?? json['ilce'] ?? 'İlçe Belirtilmemiş',
       semtAdi: json['semt_adi'] ?? 'Semt Belirtilmemiş',
       vibeEtiketleri: List<String>.from(json['vibe_etiketleri'] ?? []),
       latitude: (json['latitude'] ?? 0.0).toDouble(),
       longitude: (json['longitude'] ?? 0.0).toDouble(),
       similarity: (json['similarity'] ?? 0.0).toDouble(),
-      fotograflar: List<String>.from(json['fotograflar'] ?? []),
+      gorseller: gorselList, // Artık burası zengin bir liste
       yorumlar: List<Map<String, dynamic>>.from(json['yorumlar'] ?? []),
-      postlar: List<Map<String, dynamic>>.from(postList),
+      postlar: List<Map<String, dynamic>>.from(
+        json['cafe_postlar'] ?? json['postlar'] ?? [],
+      ),
     );
   }
 
-  /// Modeli tekrar JSON formatına dönüştürmek için kullanılır.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -69,7 +78,7 @@ class Cafe {
       'latitude': latitude,
       'longitude': longitude,
       'similarity': similarity,
-      'fotograflar': fotograflar,
+      'cafe_gorselleri': gorseller,
       'yorumlar': yorumlar,
       'postlar': postlar,
     };

@@ -7,21 +7,21 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ApiService {
   final _supabase = Supabase.instance.client;
 
-  /// BERT tabanlı kafe araması yapar
+  /// SBERT tabanlı kafe araması
   Future<List<Cafe>> searchCafes(
     String query, {
+    String? il,
     String? semt,
     String? vibe,
   }) async {
     try {
-      final String hfUrl = dotenv.env['BERT_API_URL'] ?? '';
+      final String hfUrl = dotenv.env['SBERT_API_URL'] ?? '';
 
       if (hfUrl.isEmpty) {
-        throw Exception(
-          'BERT_API_URL bulunamadı! .env dosyanızı kontrol edin.',
-        );
+        throw Exception('SBERT_API_URL bulunamadı! .env dosyanı kontrol et.');
       }
 
+      // 🔥 EMBEDDING AL
       final response = await http.post(
         Uri.parse(hfUrl),
         headers: {'Content-Type': 'application/json'},
@@ -29,25 +29,40 @@ class ApiService {
       );
 
       if (response.statusCode != 200) {
-        print("Hata Kodu: ${response.statusCode}");
-        print("Hata Mesajı: ${response.body}");
-        throw Exception('BERT API Hatası');
+        throw Exception('Embedding API Hatası: ${response.statusCode}');
       }
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
-      final List<dynamic> embedding = responseData['embedding'];
 
-      // 2. Supabase RPC Çağrısı
+      // 🔥 CRITICAL FIX → double list
+      final List embedding = (responseData['embedding'] as List)
+          .map((e) => e.toDouble())
+          .toList();
+
+      // 🔥 PARAM TEMİZLEME
+      final params = {
+        'query_embedding': embedding,
+        'search_query': query,
+        'match_threshold': 0.05,
+        'match_count': 15,
+      };
+
+      if (il != null && il.isNotEmpty) {
+        params['p_il_adi'] = il;
+      }
+
+      if (semt != null && semt.isNotEmpty) {
+        params['p_ilce_adi'] = semt;
+      }
+
+      if (vibe != null && vibe.isNotEmpty) {
+        params['p_vibe_etiketi'] = vibe;
+      }
+
+      // 🔥 RPC CALL
       final List<dynamic> data = await _supabase.rpc(
         'kafe_ara_v6',
-        params: {
-          'search_query': query,
-          'query_embedding': embedding,
-          'p_ilce_adi': semt,
-          'p_vibe_etiketi': vibe,
-          'match_threshold': 0.1,
-          'match_count': 10,
-        },
+        params: params,
       );
 
       return data.map((item) => Cafe.fromJson(item)).toList();
@@ -57,7 +72,7 @@ class ApiService {
     }
   }
 
-  /// Sadece yorum ekler (kullanici_adi artık gönderilmiyor)
+  /// Yorum ekleme
   Future<void> addComment(String cafeId, String comment, int rating) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -65,18 +80,19 @@ class ApiService {
 
       await _supabase.from('cafe_yorumlar').insert({
         'cafe_id': cafeId,
-        'kullanici_id': user.id, // Foreign Key bağlantısı
+        'kullanici_id': user.id,
         'yorum_metni': comment,
         'puan': rating,
       });
+
       print("Yorum başarıyla eklendi!");
     } catch (e) {
       print("Yorum ekleme hatası: $e");
-      throw Exception('Yorum gönderilemedi, lütfen tekrar deneyin.');
+      throw Exception('Yorum gönderilemedi.');
     }
   }
 
-  /// Hem yorum ekler hem de isteğe bağlı olarak post (öneri) paylaşır
+  /// Yorum + Post paylaşımı
   Future<void> yorumVePostPaylas({
     required String cafeId,
     required String icerik,
@@ -87,7 +103,7 @@ class ApiService {
       final user = _supabase.auth.currentUser;
       if (user == null) throw "İşlem yapmak için giriş yapmalısınız!";
 
-      // 1. Önce Yorumu Kaydet
+      // 🔥 YORUM
       final yorumData = await _supabase
           .from('cafe_yorumlar')
           .insert({
@@ -98,7 +114,7 @@ class ApiService {
           .select()
           .single();
 
-      // 2. Eğer kullanıcı "Profilimde Paylaş" dediyse Post tablosuna da ekle
+      // 🔥 POST
       if (profilimdePaylas) {
         await _supabase.from('cafe_postlar').insert({
           'cafe_id': cafeId,

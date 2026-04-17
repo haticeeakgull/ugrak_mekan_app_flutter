@@ -5,10 +5,19 @@ import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../models/cafe_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
 
 class CafeDetailSheet extends StatefulWidget {
   final Cafe cafe;
-  const CafeDetailSheet({super.key, required this.cafe});
+  final double? userLatitude;
+  final double? userLongitude;
+  const CafeDetailSheet({
+    super.key,
+    required this.cafe,
+    this.userLatitude,
+    this.userLongitude,
+  });
 
   @override
   State<CafeDetailSheet> createState() => _CafeDetailSheetState();
@@ -20,6 +29,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   final TextEditingController _commentController = TextEditingController();
   final SupabaseClient supabase = Supabase.instance.client;
   bool _isSending = false;
+  bool _isLoadingLocation = false;
 
   @override
   void initState() {
@@ -33,6 +43,81 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     _tabController.dispose();
     _commentController.dispose();
     super.dispose();
+  }
+
+  // --- YOL TARİFİ FONKSİYONLARI ---
+
+  /// Kullanıcının mevcut konumunu al
+  Future<Position?> _getCurrentLocation() async {
+    try {
+      setState(() => _isLoadingLocation = true);
+
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showSnackBar("Lütfen konum servisini açın");
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showSnackBar("Konum izni gerekli");
+          return null;
+        }
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      return position;
+    } catch (e) {
+      _showSnackBar("Konum alınamadı: $e");
+      return null;
+    } finally {
+      if (mounted) setState(() => _isLoadingLocation = false);
+    }
+  }
+
+  /// Google Maps Yol Tarifi
+  Future<void> _openGoogleMapsDirections() async {
+    final userLat = widget.userLatitude;
+    final userLng = widget.userLongitude;
+
+    if (userLat == null || userLng == null) {
+      final position = await _getCurrentLocation();
+      if (position == null) return;
+      await _launchMapsUrl(position.latitude, position.longitude);
+    } else {
+      await _launchMapsUrl(userLat, userLng);
+    }
+  }
+
+  /// URL'i aç
+  Future<void> _launchMapsUrl(double startLat, double startLng) async {
+    final String googleMapsUrl =
+        'https://www.google.com/maps/dir/?api=1&origin=$startLat,$startLng&destination=${widget.cafe.latitude},${widget.cafe.longitude}&travelmode=driving';
+
+    try {
+      if (await canLaunchUrl(Uri.parse(googleMapsUrl))) {
+        await launchUrl(
+          Uri.parse(googleMapsUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        _showSnackBar("Google Maps açılamadı");
+      }
+    } catch (e) {
+      _showSnackBar("Hata: $e");
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   // --- Veritabanı İşlemleri ---
@@ -87,7 +172,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   Future<List<Map<String, dynamic>>> _fetchComments() async {
     try {
-      print("Sorgulanan Cafe ID: ${widget.cafe.id}");
       final response = await supabase
           .from('cafe_yorumlar')
           .select('*, profiles!cafe_yorumlar_kullanici_id_fkey (username)')
@@ -124,12 +208,10 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     }
   }
 
-  // --- Koleksiyon İşlemi (GÜNCELLENDİ) ---
-
   void _showCollectionPicker(String postId) {
     final TextEditingController newCollectionController =
         TextEditingController();
-    bool isNewPublic = true; // Yeni koleksiyonun başlangıç durumu
+    bool isNewPublic = true;
 
     showModalBottomSheet(
       context: context,
@@ -195,7 +277,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             await supabase.from('koleksiyonlar').insert({
                               'isim': newCollectionController.text.trim(),
                               'user_id': supabase.auth.currentUser!.id,
-                              'is_public': isNewPublic, // Gizlilik durumu
+                              'is_public': isNewPublic,
                             });
                             newCollectionController.clear();
                             setModalState(() {});
@@ -249,7 +331,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // HIZLI GİZLİLİK DEĞİŞTİRME TUŞU
                                   IconButton(
                                     icon: Icon(
                                       isPublic
@@ -265,9 +346,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                           .from('koleksiyonlar')
                                           .update({'is_public': !isPublic})
                                           .eq('id', coll['id']);
-                                      setModalState(
-                                        () {},
-                                      ); // Modal içini tazeler
+                                      setModalState(() {});
                                     },
                                   ),
                                   const Icon(Icons.add, size: 20),
@@ -310,8 +389,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       },
     );
   }
-
-  // --- Widget Yapısı (Geri Butonu ve UI) ---
 
   @override
   Widget build(BuildContext context) {
@@ -366,15 +443,66 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                           ),
                                         ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.bookmark_border,
-                                          color: Colors.deepOrange,
-                                          size: 28,
-                                        ),
-                                        onPressed: () => _showCollectionPicker(
-                                          widget.cafe.id.toString(),
-                                        ),
+                                      Row(
+                                        children: [
+                                          Tooltip(
+                                            message: "Yol Tarifi Al",
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.directions,
+                                                    color: Colors.deepOrange,
+                                                    size: 28,
+                                                  ),
+                                                  onPressed: _isLoadingLocation
+                                                      ? null
+                                                      : _openGoogleMapsDirections,
+                                                  tooltip: "Yol Tarifi",
+                                                ),
+                                                const Text(
+                                                  "Yol Tarifi",
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.deepOrange,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Tooltip(
+                                            message: "Koleksiyona Kaydet",
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.bookmark_border,
+                                                    color: Colors.deepOrange,
+                                                    size: 28,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _showCollectionPicker(
+                                                        widget.cafe.id
+                                                            .toString(),
+                                                      ),
+                                                  tooltip: "Koleksiyona Kaydet",
+                                                ),
+                                                const Text(
+                                                  "Kaydet",
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.deepOrange,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -425,6 +553,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                       },
                       body: TabBarView(
                         controller: _tabController,
+                        physics: const BouncingScrollPhysics(),
                         children: [_buildCommentList(), _buildPostList()],
                       ),
                     ),
@@ -438,9 +567,6 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       },
     );
   }
-
-  // (Diğer yardımcı widget'lar _buildPostList, _buildCommentList vb. aynı kalıyor)
-  // ... (Görsel temizlik adına buraya tekrar eklemedim ama senin kodunla birebir aynıdır)
 
   Widget _buildPostList() {
     return CustomScrollView(
@@ -497,19 +623,31 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   Widget _buildCommentList() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _fetchComments(),
-
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final comments = snapshot.data ?? [];
-        if (comments.isEmpty) {
-          return const Center(child: Text("Henüz yorum yok."));
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: comments.length,
-          itemBuilder: (context, index) => _buildCommentCard(comments[index]),
+
+        // NestedScrollView içinde scroll problemi yaşamamak için CustomScrollView
+        return CustomScrollView(
+          key: const PageStorageKey('yorumlar'),
+          slivers: [
+            if (comments.isEmpty)
+              const SliverFillRemaining(
+                child: Center(child: Text("Henüz yorum yok.")),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildCommentCard(comments[index]),
+                    childCount: comments.length,
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
@@ -681,63 +819,55 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   }
 
   Widget _buildPhotoGallery() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchCafePosts(),
-      builder: (context, snapshot) {
-        List<String> allImages = List.from(widget.cafe.fotograflar);
-        if (snapshot.hasData) {
-          final postImages = snapshot.data!
-              .where((p) => p['foto_url'] != null)
-              .map((p) => p['foto_url'] as String)
-              .toList();
-          allImages.addAll(postImages);
-        }
-        if (allImages.isEmpty) {
-          return const SizedBox(
-            height: 140,
-            child: Center(
-              child: Text(
-                "Henüz fotoğraf yok",
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ),
-          );
-        }
-        return SizedBox(
-          height: 140,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: allImages.length,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemBuilder: (context, index) => Container(
-              width: 220,
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                image: DecorationImage(
-                  image: NetworkImage(allImages[index]),
-                  fit: BoxFit.cover,
-                ),
-              ),
+    final allImages = widget.cafe.gorseller
+        .map((g) => g['foto_url'] as String)
+        .toList();
+
+    if (allImages.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: Text(
+            "Henüz fotoğraf yok",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 150, // Yüksekliği sabitlemek kritik!
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: allImages.length,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        itemBuilder: (context, index) => Container(
+          margin: const EdgeInsets.only(right: 12),
+          width: 150,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            image: DecorationImage(
+              image: NetworkImage(allImages[index]),
+              fit: BoxFit.cover,
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
-
-  Widget _buildHeaderHandle() => Center(
-    child: Container(
-      width: 40,
-      height: 5,
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey[300],
-        borderRadius: BorderRadius.circular(10),
-      ),
-    ),
-  );
 }
+
+Widget _buildHeaderHandle() => Center(
+  child: Container(
+    width: 40,
+    height: 5,
+    margin: const EdgeInsets.symmetric(vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.grey[300],
+      borderRadius: BorderRadius.circular(10),
+    ),
+  ),
+);
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);

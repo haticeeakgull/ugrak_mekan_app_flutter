@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:app_links/app_links.dart'; // Paket eklendi
+import 'package:app_links/app_links.dart';
 import 'package:ugrak_mekan_app/views/collection_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import 'package:ugrak_mekan_app/widgets/search_overlay.dart'; // Yeni import
 import '../services/api_service.dart';
 import '../services/supabase_service.dart';
 import '../models/cafe_model.dart';
 import '../widgets/cafe_card.dart';
-// ÖNEMLİ: CollectionDetailScreen'in bulunduğu yolu buraya doğru import et!
-// import 'collection_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,104 +17,64 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _searchController = TextEditingController();
   final ApiService _apiService = ApiService();
   final SupabaseService _supabaseService = SupabaseService();
   final SupabaseClient supabase = Supabase.instance.client;
-
-  // AppLinks nesnesini burada tanımlıyoruz
   final AppLinks _appLinks = AppLinks();
 
   List<Cafe> _results = [];
   bool _isLoading = false;
   String? _currentUserEmail;
-
-  String? _secilenSemt;
-  String? _secilenVibe;
   List<String> _semtler = [];
   List<String> _vibeler = [];
+
+  // Arama durumu bilgisi
+  String _activeSearchLabel = "Nereye gidiyorsun?";
 
   @override
   void initState() {
     super.initState();
-
-    // 1. Deep Link dinleyicisini başlat
     _initDeepLinks();
-
-    // 2. Diğer başlangıç ayarları
     _filtreleriYukle();
     _currentUserEmail = supabase.auth.currentUser?.email;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkProfile();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkProfile());
   }
 
+  // --- BOZULMAYAN KOLEKSİYON MANTIĞI (Deep Link) ---
   Future<void> _initDeepLinks() async {
-    // A. Uygulama tamamen kapalıyken linkle açılırsa yakala
-    // getInitialAppLink yerine getInitialLink kullanıyoruz
     final initialLink = await _appLinks.getInitialLink();
-    if (initialLink != null) {
-      _handleDeepLink(initialLink);
-    }
-
-    // B. Uygulama arka plandayken linke tıklanırsa yakala
-    _appLinks.uriLinkStream.listen((uri) {
-      _handleDeepLink(uri);
-    });
+    if (initialLink != null) _handleDeepLink(initialLink);
+    _appLinks.uriLinkStream.listen((uri) => _handleDeepLink(uri));
   }
 
   void _handleDeepLink(Uri uri) {
-    // queryParameters üzerinden kontrol et
     if (uri.queryParameters.containsKey('koleksiyonId')) {
       final String? collectionId = uri.queryParameters['koleksiyonId'];
-
       if (collectionId != null && mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CollectionDetailScreen(
-                collectionId: collectionId,
-                collectionName: "Paylaşılan Koleksiyon",
-              ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CollectionDetailScreen(
+              collectionId: collectionId,
+              collectionName: "Paylaşılan Koleksiyon",
             ),
-          );
-        });
+          ),
+        );
       }
     }
   }
 
-  // --- PROFİL KONTROLÜ ---
+  // --- SERVİS VE PROFİL İŞLEMLERİ ---
   Future<void> _checkProfile() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
-
-    try {
-      final data = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('id', userId)
-          .maybeSingle();
-
-      if (data == null || data['username'] == null) {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/complete-profile');
-        }
-      }
-    } catch (e) {
-      print("Profil kontrol hatası: $e");
-    }
-  }
-
-  // --- DİĞER FONKSİYONLAR ---
-  Future<void> _handleSignOut() async {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Çıkış yapılamadı: $e')));
+    final data = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', userId)
+        .maybeSingle();
+    if (data == null || data['username'] == null) {
+      if (mounted) Navigator.pushReplacementNamed(context, '/complete-profile');
     }
   }
 
@@ -128,22 +87,29 @@ class _HomeScreenState extends State<HomeScreen> {
         _vibeler = vibeSonuc;
       });
     } catch (e) {
-      print("Filtre yükleme hatası: $e");
+      print("Filtre hatası: $e");
     }
   }
 
-  void _handleSearch() async {
-    if (_searchController.text.isEmpty &&
-        _secilenSemt == null &&
-        _secilenVibe == null) {
-      return;
-    }
-    setState(() => _isLoading = true);
+  // --- YENİ HİBRİT ARAMA TETİKLEYİCİ ---
+  void _startSearch(
+    String? il,
+    List<String> ilceler,
+    List<String> vibeler,
+    String dogalDil,
+  ) async {
+    setState(() {
+      _isLoading = true;
+      _activeSearchLabel = il ?? "Tüm Şehirler";
+    });
+
     try {
       final results = await _apiService.searchCafes(
-        _searchController.text,
-        semt: _secilenSemt,
-        vibe: _secilenVibe,
+        dogalDil,
+        il: il,
+        vibe: vibeler.isNotEmpty
+            ? vibeler.first
+            : null, // Mevcut API'ne göre güncellendi
       );
       setState(() {
         _results = results;
@@ -151,171 +117,111 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Arama sırasında bir hata oluştu!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Arama başarısız oldu.')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        centerTitle: true, // 1. Bu satırı ekleyerek başlık alanını ortalıyoruz
-        title: Column(
-          mainAxisSize: MainAxisSize
-              .min, // Kolonun sadece içeriği kadar yer kaplamasını sağlar
-          crossAxisAlignment:
-              CrossAxisAlignment.center, // 2. Yazıları kendi içinde ortalıyoruz
-          children: [
-            const Text(
-              'Uğrak Mekan ☕',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            if (_currentUserEmail != null)
-              Text(
-                _currentUserEmail!,
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
-              ),
-          ],
-        ),
-
-        // centerTitle: true,
-        // backgroundColor: Colors.transparent,
-        // elevation: 0,
-        // leading: IconButton(
-        //   icon: const Icon(Icons.person_pin, color: Colors.deepOrange),
-        //   onPressed: () => Navigator.pushNamed(context, '/complete-profile'),
-        // ),
-        actions: [
-          IconButton(
-            onPressed: _showLogoutDialog,
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+      backgroundColor: const Color(0xFFFBFBFD),
+      appBar: _buildAppBar(),
+      body: Column(
+        children: [
+          const SizedBox(height: 10),
+          _buildPrimeSearchBar(),
+          const SizedBox(height: 20),
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.deepOrange),
+                  )
+                : _results.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) =>
+                        CafeCard(cafe: _results[index]),
+                  ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            _buildSearchRow(),
-            const SizedBox(height: 15),
-            _buildFilterRow(),
-            const SizedBox(height: 20),
-            Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.deepOrange,
-                      ),
-                    )
-                  : _results.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      itemCount: _results.length,
-                      itemBuilder: (context, index) =>
-                          CafeCard(cafe: _results[index]),
-                    ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      centerTitle: true,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      title: Column(
+        children: [
+          const Text(
+            'Uğrak Mekan ☕',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+          if (_currentUserEmail != null)
+            Text(
+              _currentUserEmail!,
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
-          ],
-        ),
+        ],
       ),
+      actions: [
+        IconButton(
+          onPressed: _showLogoutDialog,
+          icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+        ),
+      ],
     );
   }
 
-  // --- UI YARDIMCI WIDGETLAR ---
-  Widget _buildSearchRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Nasıl bir mekan arıyorsun?',
-              filled: true,
-              fillColor: Colors.white,
-              prefixIcon: const Icon(Icons.search, color: Colors.grey),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+  Widget _buildPrimeSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GestureDetector(
+        onTap: () => showGeneralDialog(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: "Search",
+          pageBuilder: (_, __, ___) => SearchOverlay(
+            vibeler: _vibeler,
+            semtler: _semtler,
+            onSearch: _startSearch,
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 5),
               ),
-            ),
+            ],
           ),
-        ),
-        const SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: _handleSearch,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepOrange,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.all(18),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Icon(Icons.send),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFilterRow() {
-    return Row(
-      children: [
-        _buildFilterContainer(
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _secilenSemt,
-              hint: const Text("Semt Seç"),
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem(value: null, child: Text("Tüm Semtler")),
-                ..._semtler.map(
-                  (s) => DropdownMenuItem(value: s, child: Text(s)),
+          child: Row(
+            children: [
+              const Icon(Icons.search, color: Colors.deepOrange),
+              const SizedBox(width: 12),
+              Text(
+                _activeSearchLabel,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
-              onChanged: (val) => setState(() => _secilenSemt = val),
-            ),
+              ),
+              const Spacer(),
+              const Icon(Icons.tune, color: Colors.grey, size: 20),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
-        _buildFilterContainer(
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _secilenVibe,
-              hint: const Text("Tarz Seç"),
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem(value: null, child: Text("Tüm Tarzlar")),
-                ..._vibeler.map(
-                  (v) =>
-                      DropdownMenuItem(value: v, child: Text(v.toUpperCase())),
-                ),
-              ],
-              onChanged: (val) => setState(() => _secilenVibe = val),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFilterContainer({required Widget child}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5),
-          ],
-        ),
-        child: child,
       ),
     );
   }
@@ -325,40 +231,41 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.coffee_outlined, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 10),
+          Icon(Icons.coffee_outlined, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
           const Text(
-            'Henüz sonuç yok. Haydi ara!',
-            style: TextStyle(color: Colors.grey, fontSize: 16),
+            'Sana uygun mekanı bulalım!',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
     );
   }
 
+  // --- ÇIKIŞ DİALOGU (AYNI KALDI) ---
   Future<void> _showLogoutDialog() async {
-    return showDialog<void>(
+    return showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text('Çıkış Yap'),
-        content: const Text('Çıkış yapmak istediğinizden emin misiniz?'),
+        content: const Text('Emin misiniz?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('İptal'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () {
               Navigator.pop(context);
-              _handleSignOut();
+              supabase.auth.signOut();
             },
-            child: const Text('Çıkış Yap'),
+            child: const Text('Çıkış', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

@@ -6,7 +6,7 @@ class AppScaffold extends StatelessWidget {
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
   final Color? backgroundColor;
-  final bool? resizeToAvoidBottomInset; // 1. Değişkeni tanımla
+  final bool? resizeToAvoidBottomInset;
 
   const AppScaffold({
     required this.body,
@@ -14,19 +14,22 @@ class AppScaffold extends StatelessWidget {
     this.bottomNavigationBar,
     this.floatingActionButton,
     this.backgroundColor,
-    this.resizeToAvoidBottomInset, // 2. Constructor'a ekle
+    this.resizeToAvoidBottomInset = true, // Default true yaptık
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: backgroundColor ?? const Color(0xFFFBFBFD),
       appBar: appBar,
-      bottomNavigationBar: bottomNavigationBar,
+      // Alt barın telefonun sistem çubuğuyla çakışmaması için Wrap ediyoruz
+      bottomNavigationBar: bottomNavigationBar != null
+          ? SafeArea(child: bottomNavigationBar!)
+          : null,
       floatingActionButton: floatingActionButton,
-      // 3. Gerçek Scaffold'a aktar
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+      // Body zaten SafeArea içinde, bu güzel.
       body: SafeArea(child: body),
     );
   }

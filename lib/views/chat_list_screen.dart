@@ -152,9 +152,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           ),
                         ),
                         title: Text(user['username']),
-                        onTap: () => _startChat(
-                          user,
-                        ), // İŞTE BURASI! Artık dokununca çalışacak.
+                        onTap: () => _startChat(user),
                       );
                     },
                   );

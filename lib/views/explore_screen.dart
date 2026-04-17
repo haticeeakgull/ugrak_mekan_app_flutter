@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart'; // gmaps alias kaldırıldı
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
@@ -32,7 +32,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _isMapLoading = true;
   bool _showCafeCards = false;
   int _currentCafeIndex = 0;
-  LatLng _userLocation = const LatLng(38.4237, 27.1428); // Varsayılan İzmir
+  LatLng _userLocation = const LatLng(38.4237, 27.1428); // İzmir Default
 
   @override
   void initState() {
@@ -44,70 +44,66 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Future<void> _initializeScreen() async {
-    await _determinePosition();
-    await _fetchNearbyKafeler();
+    // Latency'yi önlemek için konumun gelmesini BEKLEMEDEN kafeleri çekiyoruz
+    _fetchKafeler();
+    _determinePosition();
   }
 
-  // --- KONUM SERVİSİ ---
   Future<void> _determinePosition() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _showSnackBar("Lütfen konum servisini açın.");
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
-
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    if (mounted) {
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-      });
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(_userLocation, 14.5),
-      );
-    }
-  }
-
-  // --- SUPABASE VERİ ÇEKME ---
-  Future<void> _fetchNearbyKafeler() async {
     try {
-      final List<dynamic> data = await supabase.rpc(
-        'get_nearby_cafes',
-        params: {
-          'user_lat': _userLocation.latitude,
-          'user_long': _userLocation.longitude,
-          'radius_km': 30.0,
-        },
-      );
-
-      if (data.isEmpty) {
-        if (mounted) setState(() => _isMapLoading = false);
-        return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
 
-      final fullData = await supabase
-          .from('ilce_isimli_kafeler')
-          .select('*, cafe_postlar(*, profiles(username, is_private))')
-          .inFilter('id', data.map((e) => e['id']).toList());
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      );
 
       if (mounted) {
         setState(() {
-          _kafeler = fullData;
-          _prepareDiscoveryPosts();
-          _updateGoogleMarkers();
-          _isMapLoading = false;
+          _userLocation = LatLng(position.latitude, position.longitude);
         });
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(_userLocation, 11.0),
+        );
       }
     } catch (e) {
-      debugPrint("Hata: $e");
+      debugPrint("Konum alınamadı: $e");
+    }
+  }
+
+  // Latency ve görünmeme sorununu çözen ana fonksiyon
+  Future<void> _fetchKafeler() async {
+    try {
+      final res = await supabase
+          .from('ilce_isimli_kafeler')
+          .select('*, cafe_gorselleri(*)');
+
+      // 1. ADIM: Ham veri geliyor mu?
+      print("DEBUG: Supabase'den gelen veri: $res");
+
+      if (res == null || res.isEmpty) {
+        print(
+          "DEBUG: Veritabanından boş sonuç döndü! RLS veya tabloyu kontrol et.",
+        );
+      }
+
+      if (res != null && mounted) {
+        setState(() {
+          _kafeler = res;
+          _isMapLoading = false;
+        });
+
+        // 2. ADIM: Marker hazırlığı başlıyor mu?
+        print(
+          "DEBUG: ${_kafeler.length} adet kafe için markerlar hazırlanıyor...",
+        );
+        _prepareDiscoveryPosts();
+        _updateGoogleMarkers();
+      }
+    } catch (e) {
+      print("DEBUG: Hata oluştu: $e");
       if (mounted) setState(() => _isMapLoading = false);
     }
   }
@@ -117,27 +113,34 @@ class _ExploreScreenState extends State<ExploreScreen> {
     for (var cafe in _kafeler) {
       final posts = cafe['cafe_postlar'] as List? ?? [];
       for (var post in posts) {
-        if (post['profiles']?['is_private'] == false) {
+        if (post['profiles'] != null &&
+            post['profiles']?['is_private'] == false) {
           final postMap = Map<String, dynamic>.from(post);
           postMap['kafe_adi'] = cafe['kafe_adi'];
           tempPosts.add(postMap);
         }
       }
     }
-    _tumOneriPostlari = tempPosts..shuffle();
+    setState(() {
+      _tumOneriPostlari = tempPosts..shuffle();
+    });
   }
 
   void _updateGoogleMarkers() {
     Set<Marker> newMarkers = {};
     for (int i = 0; i < _kafeler.length; i++) {
       var cafe = _kafeler[i];
+      if (cafe['latitude'] == null || cafe['longitude'] == null) continue;
+
       bool isSelected = i == _currentCafeIndex && _showCafeCards;
 
       newMarkers.add(
         Marker(
           markerId: MarkerId(cafe['id'].toString()),
-          position: LatLng(cafe['latitude'], cafe['longitude']),
-          // KÜMELEME İÇİN KRİTİK: clusterManagerId atıyoruz
+          position: LatLng(
+            double.parse(cafe['latitude'].toString()),
+            double.parse(cafe['longitude'].toString()),
+          ),
           clusterManagerId: const ClusterManagerId("cafe_cluster"),
           icon: BitmapDescriptor.defaultMarkerWithHue(
             isSelected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueRed,
@@ -145,14 +148,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
           onTap: () {
             _closeSearch();
             setState(() {
-              _showCafeCards = true;
               _currentCafeIndex = i;
-              _updateGoogleMarkers();
+              _showCafeCards = true;
             });
-            _pageController.animateToPage(
-              i,
-              duration: const Duration(milliseconds: 600),
-              curve: Curves.easeInOutQuart,
+            _updateGoogleMarkers();
+
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_pageController.hasClients) {
+                _pageController.jumpToPage(i);
+              }
+            });
+
+            _mapController?.animateCamera(
+              CameraUpdate.newLatLng(
+                LatLng(
+                  double.parse(cafe['latitude'].toString()),
+                  double.parse(cafe['longitude'].toString()),
+                ),
+              ),
             );
           },
         ),
@@ -185,11 +198,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 : GoogleMap(
                     initialCameraPosition: CameraPosition(
                       target: _userLocation,
-                      zoom: 14,
+                      zoom: 10,
                     ),
                     onMapCreated: (controller) => _mapController = controller,
                     markers: _markers,
-                    // GOOGLE NATIVE CLUSTERING AYARLARI
                     clusterManagers: {
                       ClusterManager(
                         clusterManagerId: const ClusterManagerId(
@@ -197,7 +209,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         ),
                         onClusterTap: (cluster) {
                           _mapController?.animateCamera(
-                            CameraUpdate.newLatLngZoom(cluster.position, 16),
+                            CameraUpdate.newLatLngZoom(cluster.position, 14),
                           );
                         },
                       ),
@@ -218,7 +230,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 child: Container(color: Colors.black.withOpacity(0.15)),
               ),
 
-            // --- KAFE KARTLARI ---
+            // KAFE KARTLARI
             if (!isKeyboardOpen &&
                 !isSearchActive &&
                 _showCafeCards &&
@@ -227,32 +239,51 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 bottom: 30,
                 left: 0,
                 right: 0,
-                child: SizedBox(
-                  height: 280,
-                  child: PageView.builder(
-                    controller: _pageController,
-                    itemCount: _kafeler.length,
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentCafeIndex = index;
-                        _updateGoogleMarkers();
-                      });
-                      _mapController?.animateCamera(
-                        CameraUpdate.newLatLng(
-                          LatLng(
-                            _kafeler[index]['latitude'],
-                            _kafeler[index]['longitude'],
-                          ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 25, bottom: 10),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FloatingActionButton.small(
+                          heroTag: "close_cards",
+                          backgroundColor: Colors.white,
+                          child: const Icon(Icons.close, color: Colors.black),
+                          onPressed: () =>
+                              setState(() => _showCafeCards = false),
                         ),
-                      );
-                    },
-                    itemBuilder: (context, index) =>
-                        _buildCafeCard(_kafeler[index]),
-                  ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 280,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        itemCount: _kafeler.length,
+                        onPageChanged: (index) {
+                          setState(() => _currentCafeIndex = index);
+                          _updateGoogleMarkers();
+                          _mapController?.animateCamera(
+                            CameraUpdate.newLatLng(
+                              LatLng(
+                                double.parse(
+                                  _kafeler[index]['latitude'].toString(),
+                                ),
+                                double.parse(
+                                  _kafeler[index]['longitude'].toString(),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        itemBuilder: (context, index) =>
+                            _buildCafeCard(_kafeler[index]),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
-            // --- KEŞİF PANELİ ---
             if (!isKeyboardOpen && !isSearchActive && !_showCafeCards)
               _buildDiscoverySheet(),
 
@@ -263,8 +294,120 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  // --- DİĞER UI BİLEŞENLERİ (Öncekiyle Aynı, Mantık Korundu) ---
-  // (Buradaki _buildDiscoverySheet, _buildCafeCard vb. metodlar senin kodunla aynıdır)
+  Widget _buildCafeCard(dynamic cafeData) {
+    // Veriyi modelimize çeviriyoruz
+    final cafe = Cafe.fromJson(cafeData);
+    String? kapakFoto;
+
+    // Fotoğraf seçme mantığını sadece değişkeni atamak için kullanıyoruz
+    if (cafe.gorseller.isNotEmpty) {
+      // Önceliğe göre sırala ve en üsttekini al
+      // Not: sort() listeyi yerinde değiştirir, o yüzden bir yere atamana gerek yok.
+      cafe.gorseller.sort(
+        (a, b) =>
+            (b['oncelik_sirasi'] ?? 0).compareTo(a['oncelik_sirasi'] ?? 0),
+      );
+      kapakFoto = cafe.gorseller[0]['foto_url'];
+    }
+
+    // RETURN ifadesi if bloğunun DIŞINDA olmalı ki liste boş olsa bile kart çizilebilsin
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 15,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            flex: 3,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(25),
+              ),
+              child: kapakFoto != null
+                  ? Image.network(
+                      kapakFoto,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: Colors.grey[100],
+                      child: const Icon(
+                        Icons.local_cafe,
+                        size: 50,
+                        color: Colors.grey,
+                      ),
+                    ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    cafe.kafeAdi, // Artık cafeData['kafe_adi'] yerine modelden çekebilirsin
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    "${cafe.ilceAdi} • Cafe",
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  InkWell(
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => CafeDetailSheet(
+                        cafe:
+                            cafe, // Zaten modelimiz hazır, direkt gönderiyoruz
+                      ),
+                    ),
+                    child: const Text(
+                      "Tüm Detayları Gör →",
+                      style: TextStyle(
+                        color: Colors.deepOrange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDiscoverySheet() {
     return DraggableScrollableSheet(
@@ -278,7 +421,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20)],
           ),
           child: Column(
             children: [
@@ -301,7 +444,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
               Expanded(
                 child: _tumOneriPostlari.isEmpty
                     ? const Center(
-                        child: Text("Yakınlarda keşfedilecek bir şey yok."),
+                        child: CircularProgressIndicator(
+                          color: Colors.deepOrange,
+                        ),
                       )
                     : ListView.builder(
                         controller: scrollController,
@@ -421,89 +566,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _buildCafeCard(dynamic cafeData) {
-    final List<dynamic> postlar = cafeData['cafe_postlar'] ?? [];
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            flex: 3,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(25),
-              ),
-              child: postlar.isNotEmpty
-                  ? Image.network(
-                      postlar[0]['foto_url'],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    )
-                  : const Center(
-                      child: Icon(
-                        Icons.local_cafe,
-                        size: 50,
-                        color: Colors.grey,
-                      ),
-                    ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    cafeData['kafe_adi'] ?? "",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                    maxLines: 1,
-                  ),
-                  Text(
-                    "${cafeData['ilce'] ?? ''} • Cafe",
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                  InkWell(
-                    onTap: () => showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (context) =>
-                          CafeDetailSheet(cafe: Cafe.fromJson(cafeData)),
-                    ),
-                    child: const Text(
-                      "Tüm Detayları Gör →",
-                      style: TextStyle(
-                        color: Colors.deepOrange,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSearchOverlay(bool isKeyboardOpen) {
     return SafeArea(
       child: Padding(
@@ -597,9 +659,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
       debugPrint("Arama hatası: $e");
     }
   }
-
-  void _showSnackBar(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   @override
   void dispose() {
