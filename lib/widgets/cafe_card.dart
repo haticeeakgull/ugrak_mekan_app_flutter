@@ -195,13 +195,13 @@ class _CafeCardState extends State<CafeCard> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.deepOrange.withOpacity(0.08),
+                          color: const Color(0xFF346739).withOpacity(0.08),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           '%$avgMatch uyumlu',
                           style: const TextStyle(
-                            color: Colors.deepOrange,
+                            color: const Color(0xFF346739),
                             fontWeight: FontWeight.w500,
                             fontSize: 11,
                           ),

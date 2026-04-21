@@ -38,7 +38,7 @@ class _FriendsSearchWidgetState extends State<FriendsSearchWidget> {
                   hintText: "Arkadaşlarını keşfet...",
                   prefixIcon: const Icon(
                     Icons.search,
-                    color: Colors.deepOrange,
+                    color: const Color(0xFF346739),
                   ),
                   suffixIcon: _controller.text.isNotEmpty
                       ? IconButton(
@@ -66,7 +66,7 @@ class _FriendsSearchWidgetState extends State<FriendsSearchWidget> {
                   itemCount: _results.length,
                   itemBuilder: (context, index) => ListTile(
                     leading: const CircleAvatar(
-                      backgroundColor: Colors.deepOrange,
+                      backgroundColor: const Color(0xFF346739),
                       child: Icon(Icons.person, color: Colors.white, size: 20),
                     ),
                     title: Text(_results[index]['username'] ?? "Anonim"),

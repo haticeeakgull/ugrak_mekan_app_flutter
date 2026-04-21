@@ -140,7 +140,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Fotoğrafı Düzenle',
-            toolbarColor: Colors.deepOrange,
+            toolbarColor: const Color(0xFF346739),
             toolbarWidgetColor: Colors.white,
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: false,
@@ -259,7 +259,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Colors.deepOrange),
+              child: CircularProgressIndicator(color: Color(0xFF346739)),
             )
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -331,13 +331,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               child: Container(
                 width: 100,
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.05),
+                  color: const Color(0xFFF2EDC2).withOpacity(0.8),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                  border: Border.all(color: const Color(0xFF79AE6F).withOpacity(0.3)),
                 ),
                 child: const Icon(
                   Icons.add_photo_alternate_outlined,
-                  color: Colors.orange,
+                  color: const Color(0xFF79AE6F),
                   size: 30,
                 ),
               ),
@@ -437,7 +437,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               Text(
                 "${value.toInt()}/5",
                 style: const TextStyle(
-                  color: Colors.deepOrange,
+                  color: const Color(0xFF346739),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -448,7 +448,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             min: 1,
             max: 5,
             divisions: 4,
-            activeColor: Colors.deepOrange,
+            activeColor: const Color(0xFF346739),
             onChanged: onChanged,
           ),
         ],
@@ -471,7 +471,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
           ),
           selected: isSelected,
-          selectedColor: Colors.deepOrange,
+          selectedColor: const Color(0xFF346739),
           checkmarkColor: Colors.white,
           onSelected: (val) => setState(
             () => val ? _selectedVibes.add(vibe) : _selectedVibes.remove(vibe),
@@ -488,7 +488,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       child: ElevatedButton(
         onPressed: _isLoading ? null : _uploadPost,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepOrange,
+          backgroundColor: const Color(0xFF346739),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -513,13 +513,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         margin: const EdgeInsets.only(bottom: 25),
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.08),
+          color: const Color(0xFFF2EDC2).withOpacity(0.9),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.orange.withOpacity(0.2)),
+          border: Border.all(color: const Color(0xFF79AE6F).withOpacity(0.3)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.location_on_outlined, color: Colors.orange),
+            const Icon(Icons.location_on_outlined, color: Color(0xFF79AE6F)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -528,12 +528,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
                   color: _selectedCafeName == null
-                      ? Colors.orange[800]
+                      ? const Color(0xFF346739)
                       : Colors.black87,
                 ),
               ),
             ),
-            const Icon(Icons.keyboard_arrow_down, color: Colors.orange),
+            const Icon(Icons.keyboard_arrow_down, color: Color(0xFF79AE6F)),
           ],
         ),
       ),
@@ -600,7 +600,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                       leading: const CircleAvatar(
-                        backgroundColor: Colors.orange,
+                        backgroundColor: const Color(0xFF79AE6F),
                         child: Icon(
                           Icons.coffee,
                           color: Colors.white,
@@ -628,7 +628,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Widget _buildSectionTitle(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, color: Colors.deepOrange, size: 22),
+        Icon(icon, color: const Color(0xFF346739), size: 22),
         const SizedBox(width: 10),
         Text(
           title,

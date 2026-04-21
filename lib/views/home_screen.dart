@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart';
 import 'package:ugrak_mekan_app/views/collection_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
-import 'package:ugrak_mekan_app/widgets/search_overlay.dart'; // Yeni import
+import 'package:ugrak_mekan_app/widgets/search_overlay.dart';
 import '../services/api_service.dart';
 import '../services/supabase_service.dart';
 import '../models/cafe_model.dart';
@@ -24,12 +24,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Cafe> _results = [];
   bool _isLoading = false;
+  bool _isPanelOpen = false; // panel durumunu home_screen'de de takip ediyoruz
   String? _currentUserEmail;
   List<String> _semtler = [];
   List<String> _vibeler = [];
 
-  // Arama durumu bilgisi
-  String _activeSearchLabel = "Nereye gidiyorsun?";
+  // --- YENİ RENK PALETİ TANIMLARI ---
+  final Color deepGreen = const Color(
+    0xFF346739,
+  ); // Yazılar, İkonlar, Ana Butonlar
+  final Color midGreen = const Color(0xFF79AE6F); // Vurgu ve Alt Başlıklar
+  final Color lightGreen = const Color(0xFF9FCB98); // Yumuşak geçişler
+  final Color vanilla = const Color(0xFFF2EDC2); // Arka Plan Dokunuşları
 
   @override
   void initState() {
@@ -40,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkProfile());
   }
 
-  // --- BOZULMAYAN KOLEKSİYON MANTIĞI (Deep Link) ---
   Future<void> _initDeepLinks() async {
     final initialLink = await _appLinks.getInitialLink();
     if (initialLink != null) _handleDeepLink(initialLink);
@@ -64,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- SERVİS VE PROFİL İŞLEMLERİ ---
   Future<void> _checkProfile() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -80,36 +84,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _filtreleriYukle() async {
     try {
-      final semtSonuc = await _supabaseService.fetchSemtler();
+      final ilceSonuc = await _supabaseService.fetchIlceler();
       final vibeSonuc = await _supabaseService.fetchVibeEtiketleri();
       setState(() {
-        _semtler = semtSonuc;
+        _semtler = ilceSonuc;
         _vibeler = vibeSonuc;
       });
-    } catch (e) {
-      print("Filtre hatası: $e");
-    }
+    } catch (e) {}
   }
 
-  // --- YENİ HİBRİT ARAMA TETİKLEYİCİ ---
   void _startSearch(
     String? il,
     List<String> ilceler,
     List<String> vibeler,
     String dogalDil,
+    double? userLat,
+    double? userLng,
   ) async {
-    setState(() {
-      _isLoading = true;
-      _activeSearchLabel = il ?? "Tüm Şehirler";
-    });
-
+    setState(() => _isLoading = true);
     try {
       final results = await _apiService.searchCafes(
-        dogalDil,
+        dogalDil.isEmpty ? 'kafe' : dogalDil,
         il: il,
-        vibe: vibeler.isNotEmpty
-            ? vibeler.first
-            : null, // Mevcut API'ne göre güncellendi
+        semt: ilceler.isNotEmpty ? ilceler.first : null,
+        vibe: vibeler.isNotEmpty ? vibeler.first : null,
+        userLat: userLat,
+        userLng: userLng,
       );
       setState(() {
         _results = results;
@@ -117,110 +117,69 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Arama başarısız oldu.')));
+      final isTimeout = e.toString().contains('57014') ||
+          e.toString().contains('timeout') ||
+          e.toString().contains('TimeoutException');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isTimeout
+                ? 'Sunucu yavaş yanıt verdi, tekrar deneyin.'
+                : 'Arama başarısız oldu.',
+          ),
+          backgroundColor: deepGreen,
+          action: isTimeout
+              ? SnackBarAction(
+                  label: 'Tekrar Dene',
+                  textColor: Colors.white,
+                  onPressed: () => _startSearch(il, ilceler, vibeler, dogalDil, userLat, userLng),
+                )
+              : null,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      backgroundColor: const Color(0xFFFBFBFD),
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          const SizedBox(height: 10),
-          _buildPrimeSearchBar(),
-          const SizedBox(height: 20),
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.deepOrange),
-                  )
-                : _results.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: _results.length,
-                    itemBuilder: (context, index) =>
-                        CafeCard(cafe: _results[index]),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
+      backgroundColor: Colors.white,
+      appBar: null,
+      // Klavye açıldığında içeriğin kaymasını ve taşma hatasını (overflow) engeller
+      resizeToAvoidBottomInset: false,
+      body: SafeArea(
+        child: Stack(
+          // Column yerine Stack kullanarak bileşenleri üst üste bindiriyoruz
+          children: [
+            // 1. ARKA PLAN: Liste ve Boş Durum
+            // Panel kapalıyken göster, açıkken gizle
+            if (!_isPanelOpen)
+              Padding(
+                padding: const EdgeInsets.only(top: 85),
+                child: _isLoading
+                    ? Center(child: CircularProgressIndicator(color: deepGreen))
+                    : _results.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _results.length,
+                        itemBuilder: (context, index) =>
+                            CafeCard(cafe: _results[index]),
+                      ),
+              ),
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      centerTitle: true,
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      title: Column(
-        children: [
-          const Text(
-            'Uğrak Mekan ☕',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
-          ),
-          if (_currentUserEmail != null)
-            Text(
-              _currentUserEmail!,
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            // 2. ÖN PLAN: Arama Paneli
+            // Arama paneli açıldığında listenin üzerine "overlay" olarak binecek
+            ModernSearchExperience(
+              vibeler: _vibeler,
+              semtler: _semtler,
+              onSearch: _startSearch,
+              onPanelToggle: (isOpen) => setState(() => _isPanelOpen = isOpen),
+              currentUserEmail: _currentUserEmail,
+              onLogout: _showLogoutDialog,
             ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          onPressed: _showLogoutDialog,
-          icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPrimeSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GestureDetector(
-        onTap: () => showGeneralDialog(
-          context: context,
-          barrierDismissible: true,
-          barrierLabel: "Search",
-          pageBuilder: (_, __, ___) => SearchOverlay(
-            vibeler: _vibeler,
-            semtler: _semtler,
-            onSearch: _startSearch,
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.search, color: Colors.deepOrange),
-              const SizedBox(width: 12),
-              Text(
-                _activeSearchLabel,
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const Spacer(),
-              const Icon(Icons.tune, color: Colors.grey, size: 20),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -231,14 +190,41 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.coffee_outlined, size: 80, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          const Text(
-            'Sana uygun mekanı bulalım!',
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: vanilla.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Icon(
+              Icons.coffee_outlined, // Temaya uygun doğa ikonu
+              size: 50,
+              color: deepGreen,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Keşfedilmeyi Bekleyen Yerler',
             style: TextStyle(
-              color: Colors.grey,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              color: deepGreen,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Arama butonuna basarak sana en uygun mekanları bulabilirsin.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: midGreen,
+                fontSize: 14,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -246,26 +232,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ÇIKIŞ DİALOGU (AYNI KALDI) ---
   Future<void> _showLogoutDialog() async {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Çıkış Yap'),
-        content: const Text('Emin misiniz?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: vanilla,
+        title: Text(
+          'Oturumu Kapat',
+          style: TextStyle(fontWeight: FontWeight.w900, color: deepGreen),
+        ),
+        content: Text(
+          'Uygulamadan çıkış yapmak istediğinize emin misiniz?',
+          style: TextStyle(
+            color: deepGreen.withOpacity(0.8),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
+            child: Text(
+              'Geri Dön',
+              style: TextStyle(color: midGreen, fontWeight: FontWeight.bold),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: deepGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
             onPressed: () {
               Navigator.pop(context);
               supabase.auth.signOut();
             },
-            child: const Text('Çıkış', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Çıkış Yap',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

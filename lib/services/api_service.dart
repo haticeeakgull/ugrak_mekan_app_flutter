@@ -13,6 +13,8 @@ class ApiService {
     String? il,
     String? semt,
     String? vibe,
+    double? userLat,
+    double? userLng,
   }) async {
     try {
       final String hfUrl = dotenv.env['SBERT_API_URL'] ?? '';
@@ -22,11 +24,13 @@ class ApiService {
       }
 
       // 🔥 EMBEDDING AL
-      final response = await http.post(
-        Uri.parse(hfUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'text': query}),
-      );
+      final response = await http
+          .post(
+            Uri.parse(hfUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'text': query}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
         throw Exception('Embedding API Hatası: ${response.statusCode}');
@@ -44,7 +48,7 @@ class ApiService {
         'query_embedding': embedding,
         'search_query': query,
         'match_threshold': 0.05,
-        'match_count': 15,
+        'match_count': 10,
       };
 
       if (il != null && il.isNotEmpty) {
@@ -59,15 +63,20 @@ class ApiService {
         params['p_vibe_etiketi'] = vibe;
       }
 
+      if (userLat != null && userLng != null) {
+        params['p_user_lat'] = userLat;
+        params['p_user_lng'] = userLng;
+      }
+
       // 🔥 RPC CALL
-      final List<dynamic> data = await _supabase.rpc(
-        'kafe_ara_v6',
-        params: params,
-      );
+      final List<dynamic> data = await _supabase
+          .rpc('kafe_ara_v6', params: params)
+          .timeout(const Duration(seconds: 30));
 
       return data.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
       print("ApiService Arama Hatası: $e");
+      // Timeout hatası olsa bile boş liste yerine rethrow — çağıran taraf handle eder
       rethrow;
     }
   }

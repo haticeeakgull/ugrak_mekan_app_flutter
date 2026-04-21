@@ -270,7 +270,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                       suffixIcon: IconButton(
                         icon: const Icon(
                           Icons.add_circle,
-                          color: Colors.deepOrange,
+                          color: Color(0xFF346739),
                         ),
                         onPressed: () async {
                           if (newCollectionController.text.isNotEmpty) {
@@ -322,7 +322,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             return ListTile(
                               leading: const Icon(
                                 Icons.folder_open,
-                                color: Colors.orange,
+                                color: const Color(0xFF79AE6F),
                               ),
                               title: Text(coll['isim']),
                               subtitle: Text(
@@ -453,7 +453,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                                 IconButton(
                                                   icon: const Icon(
                                                     Icons.directions,
-                                                    color: Colors.deepOrange,
+                                                    color: Color(0xFF346739),
                                                     size: 28,
                                                   ),
                                                   onPressed: _isLoadingLocation
@@ -465,7 +465,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                                   "Yol Tarifi",
                                                   style: TextStyle(
                                                     fontSize: 11,
-                                                    color: Colors.deepOrange,
+                                                    color: Color(0xFF346739),
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
@@ -481,7 +481,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                                 IconButton(
                                                   icon: const Icon(
                                                     Icons.bookmark_border,
-                                                    color: Colors.deepOrange,
+                                                    color: Color(0xFF346739),
                                                     size: 28,
                                                   ),
                                                   onPressed: () =>
@@ -495,7 +495,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                                   "Kaydet",
                                                   style: TextStyle(
                                                     fontSize: 11,
-                                                    color: Colors.deepOrange,
+                                                    color: Color(0xFF346739),
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
@@ -539,9 +539,9 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                             delegate: _SliverAppBarDelegate(
                               TabBar(
                                 controller: _tabController,
-                                labelColor: Colors.deepOrange,
+                                labelColor: const Color(0xFF346739),
                                 unselectedLabelColor: Colors.grey,
-                                indicatorColor: Colors.deepOrange,
+                                indicatorColor: const Color(0xFF346739),
                                 tabs: const [
                                   Tab(text: "Yorumlar"),
                                   Tab(text: "Öneriler"),
@@ -578,7 +578,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
               "Önerini Paylaş",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            leading: const Icon(Icons.add_a_photo, color: Colors.deepOrange),
+            leading: const Icon(Icons.add_a_photo, color: Color(0xFF346739)),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -809,7 +809,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                 )
               : FloatingActionButton.small(
                   onPressed: _sendComment,
-                  backgroundColor: Colors.deepOrange,
+                  backgroundColor: const Color(0xFF346739),
                   elevation: 0,
                   child: const Icon(Icons.send, color: Colors.white),
                 ),

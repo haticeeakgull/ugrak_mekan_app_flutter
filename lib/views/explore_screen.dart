@@ -21,12 +21,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   void initState() {
     super.initState();
+    // HATALI YER: context.read yerine direkt oluşturuyoruz
     _controller = MapExploreController();
+
+    // Verileri çekmeye başla
     _controller.initLocation();
+
+    // Değişiklikleri dinle ve ekranı güncelle
     _controller.addListener(() {
       if (mounted) setState(() {});
     });
-    _searchFocusNode.addListener(() => setState(() {}));
+
+    _searchFocusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -46,7 +54,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             // GOOGLE MAP
             _controller.isMapLoading
                 ? const Center(
-                    child: CircularProgressIndicator(color: Colors.deepOrange),
+                    child: CircularProgressIndicator(color: Color(0xFF346739)),
                   )
                 : GoogleMap(
                     initialCameraPosition: CameraPosition(
@@ -54,7 +62,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       zoom: 11,
                     ),
                     onMapCreated: _controller.setMapController,
-                    onCameraIdle: _controller.fetchVisibleKafeler,
+                    onCameraIdle: () async {
+                      final controller = await _controller.mapController
+                          ?.getVisibleRegion();
+                      if (controller != null) {
+                        // Haritanın merkezini al ve listeyi ona göre tekrar diz
+                        final center = LatLng(
+                          (controller.northeast.latitude +
+                                  controller.southwest.latitude) /
+                              2,
+                          (controller.northeast.longitude +
+                                  controller.southwest.longitude) /
+                              2,
+                        );
+                        _controller.updateLocationAndSort(center);
+                      }
+                    },
                     markers: _controller.markers,
                     myLocationEnabled: true,
                     myLocationButtonEnabled: false,
@@ -90,7 +113,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
             if (!isKeyboardOpen &&
                 !isSearchActive &&
                 !_controller.showCafeCards)
-              DiscoverySheetWidget(discoveryPosts: _controller.discoveryPosts),
+              DiscoverySheetWidget(
+                discoveryPosts: _controller.globalDiscoveryPosts,
+                onLoadMore: () => _controller.loadGlobalDiscovery(loadMore: true),
+                isLoading: _controller.isFetching,
+              ),
 
             // SEARCH BAR
             FriendsSearchWidget(

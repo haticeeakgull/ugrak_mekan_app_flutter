@@ -111,7 +111,7 @@ class _FollowListState extends State<_FollowList> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.deepOrange),
+        child: CircularProgressIndicator(color: Color(0xFF346739)),
       );
     }
 

@@ -80,14 +80,14 @@ Widget buildBadgeSection(String userId) {
                     children: [
                       CircleAvatar(
                         radius: 28,
-                        backgroundColor: Colors.orange.withOpacity(0.1),
+                        backgroundColor: const Color(0xFFF2EDC2),
                         backgroundImage: iconUrl.isNotEmpty
                             ? NetworkImage(iconUrl)
                             : null,
                         child: iconUrl.isEmpty
                             ? const Icon(
                                 Icons.workspace_premium,
-                                color: Colors.orange,
+                                color: const Color(0xFF79AE6F),
                               )
                             : null,
                       ),

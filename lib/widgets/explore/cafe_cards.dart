@@ -120,7 +120,7 @@ class CafeCardsWidget extends StatelessWidget {
                     child: const Text(
                       "Tüm Detayları Gör →",
                       style: TextStyle(
-                        color: Colors.deepOrange,
+                        color: const Color(0xFF346739),
                         fontWeight: FontWeight.bold,
                       ),
                     ),

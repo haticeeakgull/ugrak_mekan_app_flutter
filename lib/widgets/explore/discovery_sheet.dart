@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
 import '../../views/post_detail_screen.dart';
 
-class DiscoverySheetWidget extends StatelessWidget {
+class DiscoverySheetWidget extends StatefulWidget {
   final List<Map<String, dynamic>>? discoveryPosts;
-  const DiscoverySheetWidget({super.key, this.discoveryPosts});
+  final VoidCallback? onLoadMore;
+  final bool isLoading;
+  
+  const DiscoverySheetWidget({
+    super.key,
+    this.discoveryPosts,
+    this.onLoadMore,
+    this.isLoading = false,
+  });
 
+  @override
+  State<DiscoverySheetWidget> createState() => _DiscoverySheetWidgetState();
+}
+
+class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -14,6 +27,16 @@ class DiscoverySheetWidget extends StatelessWidget {
       snap: true,
       snapSizes: const [0.14, 0.95],
       builder: (context, scrollController) {
+        // Scroll listener for pagination
+        scrollController.addListener(() {
+          if (scrollController.position.pixels >=
+                  scrollController.position.maxScrollExtent - 200 &&
+              !widget.isLoading &&
+              widget.onLoadMore != null) {
+            widget.onLoadMore!();
+          }
+        });
+
         return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -23,6 +46,7 @@ class DiscoverySheetWidget extends StatelessWidget {
           child: Column(
             children: [
               const SizedBox(height: 15),
+              // Tutamaç
               Container(
                 width: 50,
                 height: 5,
@@ -35,29 +59,45 @@ class DiscoverySheetWidget extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 20),
                 child: Text(
                   "Sana Özel Keşifler",
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
               Expanded(
-                child: discoveryPosts == null
+                child: widget.discoveryPosts == null
                     ? const Center(
                         child: CircularProgressIndicator(
-                          color: Colors.deepOrange,
+                          color: Color(0xFF346739),
                         ),
                       )
-                    : discoveryPosts!.isEmpty
+                    : widget.discoveryPosts!.isEmpty
                     ? const Center(
                         child: Text("Henüz keşfedilecek post bulunamadı."),
                       )
                     : ListView.builder(
                         controller: scrollController,
                         padding: const EdgeInsets.only(bottom: 120),
-                        itemCount: discoveryPosts!.length,
-                        itemBuilder: (context, index) => _buildPostItem(
-                          context,
-                          discoveryPosts![index],
-                          index,
-                        ),
+                        itemCount: widget.discoveryPosts!.length + (widget.isLoading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == widget.discoveryPosts!.length) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF346739),
+                                ),
+                              ),
+                            );
+                          }
+                          return _buildPostItem(
+                            context,
+                            widget.discoveryPosts![index],
+                            index,
+                          );
+                        },
                       ),
               ),
             ],
@@ -75,6 +115,10 @@ class DiscoverySheetWidget extends StatelessWidget {
     final String username = post['profiles'] != null
         ? post['profiles']['username'] ?? 'Anonim'
         : 'Anonim';
+    final String kafeAdi = post['kafe_adi'] ?? 'Bilinmeyen Mekan';
+    final double? distance =
+        post['distance']; // Controller'da hesapladığımız mesafe
+
     return Container(
       height: 480,
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 25),
@@ -83,77 +127,124 @@ class DiscoverySheetWidget extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(post['foto_url'] ?? "", fit: BoxFit.cover),
+            // Görsel
+            Image.network(
+              post['foto_url'] ?? "",
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: Colors.grey[200],
+                child: const Icon(Icons.image_not_supported),
+              ),
+            ),
+            // Karartma Gradient (Yazıların okunması için)
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black12,
+                    Colors.black26,
                     Colors.transparent,
-                    Colors.black.withOpacity(0.9),
+                    Colors.black.withOpacity(0.85),
                   ],
                 ),
               ),
             ),
+            // İçerik
             Padding(
               padding: const EdgeInsets.all(25),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Kullanıcı Bilgisi
                   Row(
                     children: [
                       CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.deepOrange,
+                        radius: 18,
+                        backgroundColor: const Color(0xFF346739),
                         child: Text(
                           username[0].toUpperCase(),
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Text(
                         username,
                         style: const TextStyle(
                           color: Colors.white,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
+                  // Başlık
                   Text(
                     post['baslik'] ?? "",
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 26,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 15),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white24,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
+                  const SizedBox(height: 6),
+                  // Kafe Adı ve Mesafe
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: Colors.white70,
+                        size: 16,
                       ),
-                    ),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (c) => PostDetailScreen(
-                          allPosts: discoveryPosts!,
-                          initialIndex: index,
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          "$kafeAdi ${distance != null ? '• ${(distance / 1000).toStringAsFixed(1)} km' : ''}",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Buton
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: const BorderSide(color: Colors.white30),
+                        ),
+                      ),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (c) => PostDetailScreen(
+                            allPosts: widget.discoveryPosts!,
+                            initialIndex: index,
+                          ),
+                        ),
+                      ),
+                      child: const Text(
+                        "Detayları İncele",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    child: const Text("Detayları İncele"),
                   ),
                 ],
               ),

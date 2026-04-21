@@ -90,7 +90,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Fotoğrafı Düzenle',
-            toolbarColor: Colors.deepOrange,
+            toolbarColor: const Color(0xFF346739),
             toolbarWidgetColor: Colors.white,
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: true,
@@ -196,7 +196,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   Widget build(BuildContext context) {
     final Color themeColor = _hasChanges
         ? Colors.blueAccent
-        : Colors.deepOrange;
+        : const Color(0xFF346739);
 
     return AppScaffold(
       backgroundColor: Colors.grey[50],

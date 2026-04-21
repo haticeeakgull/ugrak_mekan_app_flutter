@@ -325,7 +325,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(color: Colors.deepOrange),
+          child: CircularProgressIndicator(color: Color(0xFF346739)),
         ),
       );
     }
@@ -368,7 +368,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ],
       ),
       body: RefreshIndicator(
-        color: Colors.deepOrange,
+        color: const Color(0xFF346739),
         onRefresh: _loadAllProfileData,
         child: DefaultTabController(
           length: 2,
@@ -392,8 +392,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 pinned: true,
                 delegate: _SliverAppBarDelegate(
                   const TabBar(
-                    indicatorColor: Colors.deepOrange,
-                    labelColor: Colors.deepOrange,
+                    indicatorColor: const Color(0xFF346739),
+                    labelColor: const Color(0xFF346739),
                     unselectedLabelColor: Colors.grey,
                     tabs: [
                       Tab(icon: Icon(Icons.grid_on), text: "Uğraklarım"),
@@ -596,7 +596,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Widget _buildOtherProfileButton() {
     String buttonText = "Takip Et";
-    Color btnColor = Colors.deepOrange;
+    Color btnColor = const Color(0xFF346739);
     Color textColor = Colors.white;
 
     if (_followStatus == "following") {
@@ -624,56 +624,88 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildCollectionGrid(bool isMe) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: _userCollections.length + (isMe ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (isMe && index == 0) {
-          return InkWell(
-            onTap: _onCreateCollection,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.orange[100]!),
+    return Stack(
+      children: [
+        GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+            childAspectRatio: 0.95,
+          ),
+          itemCount: _userCollections.length,
+          itemBuilder: (context, index) {
+            final col = _userCollections[index];
+            return CollectionCard(
+              collection: col,
+              isMe: isMe,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CollectionDetailScreen(
+                    collectionId: col['id'].toString(),
+                    collectionName: col['isim'] ?? "Koleksiyon",
+                  ),
+                ),
               ),
-              child: const Icon(Icons.add, size: 40, color: Colors.deepOrange),
-            ),
-          );
-        }
-        final col = _userCollections[isMe ? index - 1 : index];
-        return CollectionCard(
-          collection: col,
-          isMe: isMe,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CollectionDetailScreen(
-                collectionId: col['id'].toString(),
-                collectionName: col['isim'] ?? "Koleksiyon",
+              onShare: () => _onShareCollection(col),
+              onMenuSelected: (val) async {
+                if (val == 'delete') {
+                  await _collectionService.deleteCollection(col['id'].toString());
+                  _loadAllProfileData();
+                } else if (val == 'privacy') {
+                  await _collectionService.updatePrivacy(
+                    col['id'].toString(),
+                    col['is_public'] ?? true,
+                  );
+                  _loadAllProfileData();
+                }
+              },
+            );
+          },
+        ),
+        // Floating "Yeni Koleksiyon" butonu (sadece kendi profilinde)
+        if (isMe)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF346739),
+              child: InkWell(
+                onTap: _onCreateCollection,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Yeni Koleksiyon',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-          onShare: () => _onShareCollection(col),
-          onMenuSelected: (val) async {
-            if (val == 'delete') {
-              await _collectionService.deleteCollection(col['id'].toString());
-              _loadAllProfileData();
-            } else if (val == 'privacy') {
-              await _collectionService.updatePrivacy(
-                col['id'].toString(),
-                col['is_public'] ?? true,
-              );
-              _loadAllProfileData();
-            }
-          },
-        );
-      },
+      ],
     );
   }
 
@@ -699,20 +731,84 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void _onCreateCollection() {
     final controller = TextEditingController();
+    const deepGreen = Color(0xFF346739);
+    const midGreen = Color(0xFF79AE6F);
+    const vanilla = Color(0xFFF2EDC2);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Yeni Koleksiyon"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: "Koleksiyon adı"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: vanilla,
+        title: const Text(
+          "Yeni Koleksiyon",
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: deepGreen,
+            fontSize: 20,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Favori mekanlarını bir araya getir',
+              style: TextStyle(
+                color: midGreen,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(
+                color: deepGreen,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: InputDecoration(
+                hintText: "Örn: Çalışma Mekanlarım",
+                hintStyle: TextStyle(
+                  color: deepGreen.withOpacity(0.4),
+                  fontWeight: FontWeight.w500,
+                ),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Vazgeç"),
+            child: const Text(
+              "Vazgeç",
+              style: TextStyle(
+                color: midGreen,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: deepGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
             onPressed: () async {
               if (controller.text.isNotEmpty) {
                 await _collectionService.createCollection(controller.text);
@@ -722,7 +818,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 }
               }
             },
-            child: const Text("Oluştur"),
+            child: const Text(
+              "Oluştur",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

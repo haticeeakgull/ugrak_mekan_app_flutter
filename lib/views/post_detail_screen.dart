@@ -206,7 +206,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _currentPage == index
-                            ? Colors.deepOrange
+                            ? const Color(0xFF346739)
                             : Colors.grey.withOpacity(0.5),
                       ),
                     ),
@@ -301,10 +301,10 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: Colors.deepOrange.shade100,
+                backgroundColor: const Color(0xFFF2EDC2),
                 child: Text(
                   user.isNotEmpty ? user[0].toUpperCase() : "?",
-                  style: const TextStyle(color: Colors.deepOrange),
+                  style: const TextStyle(color: Color(0xFF346739)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -357,7 +357,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
             Icons.volume_up,
             "Ses Seviyesi",
             (ratings['ses'] ?? 0).toDouble(),
-            Colors.orange,
+            const Color(0xFF79AE6F),
           ),
           _buildRatingItem(
             Icons.groups,
@@ -396,16 +396,16 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.deepOrange.withOpacity(0.1),
+                        color: const Color(0xFF346739).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.deepOrange.withOpacity(0.3),
+                          color: const Color(0xFF346739).withOpacity(0.3),
                         ),
                       ),
                       child: Text(
                         v.toString(),
                         style: const TextStyle(
-                          color: Colors.deepOrange,
+                          color: const Color(0xFF346739),
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),

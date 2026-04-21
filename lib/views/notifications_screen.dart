@@ -104,7 +104,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           case 'follow':
             message = "seni takip etmeye başladı.";
             icon = Icons.person_add_alt_1_rounded;
-            iconColor = Colors.deepOrange;
+            iconColor = const Color(0xFF346739);
             break;
           case 'follow_accept':
             message = "takip isteğini kabul etti.";

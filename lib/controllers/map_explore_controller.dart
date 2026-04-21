@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/explore_service.dart';
 
 class MapExploreController extends ChangeNotifier {
@@ -8,67 +9,125 @@ class MapExploreController extends ChangeNotifier {
   GoogleMapController? mapController;
   final PageController pageController = PageController(viewportFraction: 0.88);
 
-  LatLng userLocation = const LatLng(38.4237, 27.1428);
+  LatLng userLocation = const LatLng(39.9334, 32.8597); // Türkiye merkezi
   List<dynamic> kafeler = [];
-  List<Map<String, dynamic>>? discoveryPosts;
+  Map<String, dynamic> kafeDetailsCache = {}; // Detay cache
+  List<Map<String, dynamic>>? globalDiscoveryPosts = [];
   Set<Marker> markers = {};
 
   bool isFetching = false;
   bool isMapLoading = true;
   bool showCafeCards = false;
   int currentCafeIndex = 0;
+  int discoveryOffset = 0; // Pagination için
 
   void setMapController(GoogleMapController controller) {
     mapController = controller;
-    fetchVisibleKafeler();
+    updateMarkers();
   }
 
   Future<void> initLocation() async {
     try {
-      final pos = await _service.getCurrentLocation();
+      // Paralel olarak hem konum hem de kafeleri çek
+      final results = await Future.wait([
+        _service.getCurrentLocation(),
+        _service.fetchAllKafeler(),
+      ]);
+
+      final pos = results[0] as Position;
       userLocation = LatLng(pos.latitude, pos.longitude);
+      kafeler = results[1] as List<dynamic>;
+
       isMapLoading = false;
-      notifyListeners();
+
+      // Markerları hazırla
+      updateMarkers();
+      
+      // Keşfet postlarını arka planda yükle (UI'ı bloklamaz)
+      loadGlobalDiscovery();
     } catch (e) {
+      debugPrint("Başlatma hatası: $e");
       isMapLoading = false;
+      updateMarkers();
+      loadGlobalDiscovery();
+    }
+  }
+
+  // Harita her durduğunda veriyi sırala
+  Future<void> updateLocationAndSort(LatLng newLocation) async {
+    userLocation = newLocation;
+    if (globalDiscoveryPosts != null && globalDiscoveryPosts!.isNotEmpty) {
+      _sortPostsByDistance();
       notifyListeners();
     }
   }
 
-  Future<void> fetchVisibleKafeler() async {
-    if (mapController == null || isFetching) return;
+  Future<void> loadGlobalDiscovery({bool loadMore = false}) async {
+    if (isFetching) return;
     isFetching = true;
 
     try {
-      final bounds = await mapController!.getVisibleRegion();
-      kafeler = await _service.fetchKafeler(bounds);
-      _prepareDiscoveryPosts();
-      updateMarkers();
+      if (!loadMore) {
+        discoveryOffset = 0;
+        globalDiscoveryPosts = [];
+      }
+
+      final List<Map<String, dynamic>> rawPosts = await _service
+          .fetchDiscoveryPostsRaw(limit: 20, offset: discoveryOffset);
+
+      if (rawPosts.isEmpty) {
+        isFetching = false;
+        notifyListeners();
+        return;
+      }
+
+      List<Map<String, dynamic>> processedPosts = [];
+      for (var post in rawPosts) {
+        final cafeInfo = post['ilce_isimli_kafeler'];
+        if (cafeInfo == null) continue;
+
+        final postMap = Map<String, dynamic>.from(post);
+        postMap['kafe_adi'] = cafeInfo['kafe_adi'] ?? 'Bilinmeyen Kafe';
+
+        double cafeLat = double.parse(cafeInfo['latitude'].toString());
+        double cafeLng = double.parse(cafeInfo['longitude'].toString());
+
+        postMap['distance'] = Geolocator.distanceBetween(
+          userLocation.latitude,
+          userLocation.longitude,
+          cafeLat,
+          cafeLng,
+        );
+
+        processedPosts.add(postMap);
+      }
+
+      if (loadMore) {
+        globalDiscoveryPosts!.addAll(processedPosts);
+      } else {
+        globalDiscoveryPosts = processedPosts;
+      }
+
+      globalDiscoveryPosts!.sort((a, b) => a['distance'].compareTo(b['distance']));
+      discoveryOffset += rawPosts.length;
+      isFetching = false;
+      notifyListeners();
     } catch (e) {
-      debugPrint("Hata: $e");
-    } finally {
+      debugPrint("loadGlobalDiscovery hatası: $e");
+      if (!loadMore) globalDiscoveryPosts = [];
       isFetching = false;
       notifyListeners();
     }
   }
 
-  void _prepareDiscoveryPosts() {
-    List<Map<String, dynamic>> tempPosts = [];
-    for (var cafe in kafeler) {
-      final posts = cafe['cafe_postlar'] as List? ?? [];
-      for (var post in posts) {
-        final profile = post['profiles'];
-        if (profile != null &&
-            (profile['is_private'] == false || profile['is_private'] == null)) {
-          final postMap = Map<String, dynamic>.from(post);
-          postMap['kafe_adi'] = cafe['kafe_adi'];
-          tempPosts.add(postMap);
-        }
-      }
-    }
-    discoveryPosts = tempPosts..shuffle();
+  void _sortPostsByDistance() {
+    if (globalDiscoveryPosts == null) return;
+    globalDiscoveryPosts!.sort(
+      (a, b) => a['distance'].compareTo(b['distance']),
+    );
   }
 
+  // Markerları TÜM listeye göre oluşturur (hafif veri)
   void updateMarkers() {
     Set<Marker> newMarkers = {};
     for (int i = 0; i < kafeler.length; i++) {
@@ -79,13 +138,13 @@ class MapExploreController extends ChangeNotifier {
       newMarkers.add(
         Marker(
           markerId: MarkerId(cafe['id'].toString()),
+          clusterManagerId: const ClusterManagerId("cafe_cluster"),
           position: LatLng(
             double.parse(cafe['latitude'].toString()),
             double.parse(cafe['longitude'].toString()),
           ),
-          clusterManagerId: const ClusterManagerId("cafe_cluster"),
           icon: BitmapDescriptor.defaultMarkerWithHue(
-            isSelected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueRed,
+            isSelected ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueRed,
           ),
           onTap: () => onMarkerTapped(i),
         ),
@@ -93,6 +152,19 @@ class MapExploreController extends ChangeNotifier {
     }
     markers = newMarkers;
     notifyListeners();
+  }
+
+  // Kafe detaylarını cache'den veya API'den çek
+  Future<Map<String, dynamic>?> getKafeDetails(String kafeId) async {
+    if (kafeDetailsCache.containsKey(kafeId)) {
+      return kafeDetailsCache[kafeId];
+    }
+
+    final details = await _service.fetchKafeDetails(kafeId);
+    if (details != null) {
+      kafeDetailsCache[kafeId] = details;
+    }
+    return details;
   }
 
   void onMarkerTapped(int index) {

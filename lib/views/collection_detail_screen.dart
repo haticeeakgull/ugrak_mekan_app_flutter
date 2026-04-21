@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
-// Kendi dosya yoluna göre bu importu kontrol et:
 import "package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart";
 import 'package:ugrak_mekan_app/models/cafe_model.dart';
+
+const Color _deepGreen = Color(0xFF346739);
+const Color _midGreen = Color(0xFF79AE6F);
+const Color _vanilla = Color(0xFFF2EDC2);
 
 class CollectionDetailScreen extends StatefulWidget {
   final String collectionId;
@@ -22,7 +25,6 @@ class CollectionDetailScreen extends StatefulWidget {
 class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
 
-  // Sadece kafeleri çeken temizlenmiş sorgu
   Future<List<Map<String, dynamic>>> _fetchCollectionItems() async {
     try {
       final response = await supabase
@@ -32,7 +34,10 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
             cafe_id,
             ilce_isimli_kafeler (
               id,
-              kafe_adi
+              kafe_adi,
+              il_adi,
+              ilce_adi,
+              semt_adi
             )
           ''')
           .eq('koleksiyon_id', widget.collectionId);
@@ -50,7 +55,14 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Mekan koleksiyondan kaldırıldı.')),
+          SnackBar(
+            content: const Text('Mekan koleksiyondan kaldırıldı'),
+            backgroundColor: _deepGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -61,79 +73,98 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
           widget.collectionName,
-          style: const TextStyle(color: Colors.black),
+          style: const TextStyle(
+            color: _deepGreen,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: const IconThemeData(color: _deepGreen),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _fetchCollectionItems(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(color: Colors.deepOrange),
+              child: CircularProgressIndicator(color: _deepGreen),
             );
           }
 
           final items = snapshot.data ?? [];
 
           if (items.isEmpty) {
-            return const Center(child: Text("Bu koleksiyon henüz boş ✨"));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: _vanilla.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: const Icon(
+                      Icons.bookmark_border_rounded,
+                      size: 50,
+                      color: _deepGreen,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Koleksiyon Boş',
+                    style: TextStyle(
+                      color: _deepGreen,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Henüz hiç mekan eklenmemiş',
+                    style: TextStyle(
+                      color: _midGreen,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
               final cafe = item['ilce_isimli_kafeler'];
 
-              // Eğer veri tabanında bir hata varsa boş dönmesin
               if (cafe == null) return const SizedBox.shrink();
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(12),
-                  leading: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.deepOrange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.restaurant,
-                      color: Colors.deepOrange,
-                    ),
-                  ),
-                  title: Text(
-                    cafe['kafe_adi'] ?? 'İsimsiz Mekan',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    "Kayıtlı Mekan",
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(
-                      Icons.remove_circle_outline,
-                      color: Colors.redAccent,
-                    ),
-                    onPressed: () => _removeFromCollection(item['id']),
-                  ),
+              final String cafeName = cafe['kafe_adi'] ?? 'İsimsiz Mekan';
+              final String? ilAdi = cafe['il_adi'];
+              final String? ilceAdi = cafe['ilce_adi'];
+              final String? semtAdi = cafe['semt_adi'];
+
+              String location = '';
+              if (semtAdi != null) location = semtAdi;
+              else if (ilceAdi != null) location = ilceAdi;
+              else if (ilAdi != null) location = ilAdi;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: GestureDetector(
                   onTap: () {
                     final hamKafeVerisi = item['ilce_isimli_kafeler'];
                     if (hamKafeVerisi != null) {
                       final kafeObjesi = Cafe.fromJson(hamKafeVerisi);
-
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -143,11 +174,163 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
                       );
                     }
                   },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: _midGreen.withOpacity(0.15),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _deepGreen.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          // İkon
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: _vanilla,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.coffee_rounded,
+                              color: _deepGreen,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          // Metin
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  cafeName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: _deepGreen,
+                                  ),
+                                ),
+                                if (location.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.location_on_rounded,
+                                        size: 13,
+                                        color: _midGreen,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          location,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: _midGreen,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          // Sil butonu
+                          GestureDetector(
+                            onTap: () => _showRemoveDialog(item['id']),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.redAccent,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  void _showRemoveDialog(dynamic itemId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: _vanilla,
+        title: const Text(
+          'Mekanı Kaldır',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: _deepGreen,
+          ),
+        ),
+        content: Text(
+          'Bu mekanı koleksiyondan kaldırmak istediğine emin misin?',
+          style: TextStyle(
+            color: _deepGreen.withOpacity(0.8),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Vazgeç',
+              style: TextStyle(
+                color: _midGreen,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _removeFromCollection(itemId);
+            },
+            child: const Text(
+              'Kaldır',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
