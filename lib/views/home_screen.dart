@@ -29,6 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _semtler = [];
   List<String> _vibeler = [];
 
+  final GlobalKey _searchKey = GlobalKey();
+  double _searchBarHeight = 166; // header (~110) + search bar (~56)
+
   // --- YENİ RENK PALETİ TANIMLARI ---
   final Color deepGreen = const Color(
     0xFF346739,
@@ -43,7 +46,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _initDeepLinks();
     _filtreleriYukle();
     _currentUserEmail = supabase.auth.currentUser?.email;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkProfile());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkProfile();
+      // Search bar yüksekliğini ölç
+      final ctx = _searchKey.currentContext;
+      if (ctx != null) {
+        final box = ctx.findRenderObject() as RenderBox?;
+        if (box != null && mounted) {
+          setState(() => _searchBarHeight = box.size.height);
+        }
+      }
+    });
   }
 
   Future<void> _initDeepLinks() async {
@@ -149,35 +162,56 @@ class _HomeScreenState extends State<HomeScreen> {
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Stack(
-          // Column yerine Stack kullanarak bileşenleri üst üste bindiriyoruz
           children: [
-            // 1. ARKA PLAN: Liste ve Boş Durum
-            // Panel kapalıyken göster, açıkken gizle
-            if (!_isPanelOpen)
-              Padding(
-                padding: const EdgeInsets.only(top: 85),
-                child: _isLoading
-                    ? Center(child: CircularProgressIndicator(color: deepGreen))
-                    : _results.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: _results.length,
-                        itemBuilder: (context, index) =>
-                            CafeCard(cafe: _results[index]),
-                      ),
-              ),
+            // 1. SONUÇ LİSTESİ — search bar'ın altından başlar
+            Positioned(
+              top: _isPanelOpen ? 0 : _searchBarHeight,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _isPanelOpen
+                  ? const SizedBox.shrink()
+                  : _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(color: deepGreen),
+                    )
+                  : _results.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: _results.length,
+                      itemBuilder: (context, index) =>
+                          CafeCard(cafe: _results[index]),
+                    ),
+            ),
 
-            // 2. ÖN PLAN: Arama Paneli
-            // Arama paneli açıldığında listenin üzerine "overlay" olarak binecek
-            ModernSearchExperience(
-              vibeler: _vibeler,
-              semtler: _semtler,
-              onSearch: _startSearch,
-              onPanelToggle: (isOpen) => setState(() => _isPanelOpen = isOpen),
-              currentUserEmail: _currentUserEmail,
-              onLogout: _showLogoutDialog,
+            // 2. ARAMA PANELİ — üstte overlay
+            Align(
+              alignment: Alignment.topCenter,
+              child: ModernSearchExperience(
+                key: _searchKey,
+                vibeler: _vibeler,
+                semtler: _semtler,
+                onSearch: _startSearch,
+                onPanelToggle: (isOpen) {
+                  setState(() => _isPanelOpen = isOpen);
+                  // Panel kapandığında yüksekliği ölç
+                  if (!isOpen) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final ctx = _searchKey.currentContext;
+                      if (ctx != null) {
+                        final box = ctx.findRenderObject() as RenderBox?;
+                        if (box != null && mounted) {
+                          setState(() => _searchBarHeight = box.size.height);
+                        }
+                      }
+                    });
+                  }
+                },
+                currentUserEmail: _currentUserEmail,
+                onLogout: _showLogoutDialog,
+              ),
             ),
           ],
         ),

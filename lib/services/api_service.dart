@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cafe_model.dart';
@@ -47,8 +48,8 @@ class ApiService {
       final params = {
         'query_embedding': embedding,
         'search_query': query,
-        'match_threshold': 0.05,
-        'match_count': 10,
+        'match_threshold': 0.0,
+        'match_count': 20,  // 10 → 20
       };
 
       if (il != null && il.isNotEmpty) {
@@ -69,11 +70,30 @@ class ApiService {
       }
 
       // 🔥 RPC CALL
+      debugPrint('🔍 Arama params: $params');
       final List<dynamic> data = await _supabase
           .rpc('kafe_ara_v6', params: params)
           .timeout(const Duration(seconds: 30));
+      debugPrint('✅ Sonuç sayısı: ${data.length}');
+      if (data.isNotEmpty) {
+        debugPrint('🏆 İlk 3 sonuç: ${data.take(3).map((e) => "${e['kafe_adi']} (${e['similarity']})").join(", ")}');
+      }
 
-      return data.map((item) => Cafe.fromJson(item)).toList();
+      // Çift kayıtları id'ye göre tekilleştir ve similarity'e göre sırala
+      final seen = <String>{};
+      final unique = data.where((item) {
+        final id = item['id'].toString();
+        return seen.add(id);
+      }).toList();
+      
+      // Similarity'e göre sırala (DISTINCT ON sıralamayı bozuyor)
+      unique.sort((a, b) {
+        final simA = (a['similarity'] as num?)?.toDouble() ?? 0.0;
+        final simB = (b['similarity'] as num?)?.toDouble() ?? 0.0;
+        return simB.compareTo(simA);
+      });
+
+      return unique.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
       print("ApiService Arama Hatası: $e");
       // Timeout hatası olsa bile boş liste yerine rethrow — çağıran taraf handle eder

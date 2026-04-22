@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ugrak_mekan_app/views/create_post_screen.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
@@ -198,14 +200,51 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
         'yorum_metni': commentText,
       });
 
+      // Embedding sync'i arka planda tetikle
+      _triggerEmbeddingSync();
+
       _commentController.clear();
       FocusScope.of(context).unfocus();
       setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Yorum eklendi ✓')),
+        );
+      }
     } catch (e) {
-      print("Hata: $e");
+      debugPrint("Yorum ekleme hatası: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Yorum eklenemedi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       setState(() => _isSending = false);
     }
+  }
+
+  // Arka planda HF Spaces sync'i tetikle (UI'ı bloklamaz)
+  void _triggerEmbeddingSync() {
+    Future.microtask(() async {
+      try {
+        // SBERT URL'den base URL çıkar, /sync-vectors ekle
+        final sbertUrl = dotenv.env['SBERT_API_URL'] ?? '';
+        if (sbertUrl.isEmpty) return;
+        final baseUrl = sbertUrl.replaceAll('/embed', '').trim().replaceAll("'", '');
+        final syncKey = dotenv.env['MY_SYNC_KEY'] ?? '';
+
+        await http.get(
+          Uri.parse('$baseUrl/sync-vectors'),
+          headers: {'x-sync-key': syncKey},
+        ).timeout(const Duration(seconds: 5));
+        debugPrint('✅ Embedding sync tetiklendi');
+      } catch (e) {
+        debugPrint('Sync tetiklenemedi (önemli değil): $e');
+      }
+    });
   }
 
   void _showCollectionPicker(String postId) {

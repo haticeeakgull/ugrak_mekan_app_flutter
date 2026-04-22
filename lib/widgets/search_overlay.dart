@@ -183,88 +183,92 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildPremiumHeader(),
-          const SizedBox(height: 12),
-          _buildHeroSearchBar(),
-          if (isPanelOpen)
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: vanilla.withOpacity(0.93),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: midGreen.withOpacity(0.35),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: deepGreen.withOpacity(0.08),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildPremiumHeader(),
+            const SizedBox(height: 12),
+            _buildHeroSearchBar(),
+            if (isPanelOpen)
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: vanilla.withOpacity(0.93),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: midGreen.withOpacity(0.35),
+                            width: 1.5,
                           ),
-                        ],
-                      ),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 8),
-                            _buildExpandableCard(
-                              0,
-                              "Şehir Seç",
-                              _isNearby
-                                  ? "📍 Yakınım"
-                                  : (selectedCity ?? "Şehir seçilmedi"),
-                              Icons.location_on_outlined,
-                              _buildCityList(),
+                          boxShadow: [
+                            BoxShadow(
+                              color: deepGreen.withOpacity(0.08),
+                              blurRadius: 24,
+                              offset: const Offset(0, 8),
                             ),
-                            // İlçe kartı sadece şehir seçiliyse göster
-                            if (selectedCity != null && !_isNearby)
-                              _buildExpandableCard(
-                                1,
-                                "İlçe Seç",
-                                selectedDistrict ?? "Tüm ilçeler",
-                                Icons.map_outlined,
-                                _buildDistrictScroll(),
-                              ),
-                            _buildExpandableCard(
-                              2,
-                              "Vibe Seçenekleri",
-                              selectedVibes.isEmpty
-                                  ? "Etiket seçilmedi"
-                                  : "${selectedVibes.length} etiket seçildi",
-                              Icons.eco_outlined,
-                              _buildVibeChips(),
-                            ),
-                            _buildExpandableCard(
-                              3,
-                              "Yapay Zeka Asistanı",
-                              aiText.isEmpty
-                                  ? "Mekanı tarif et..."
-                                  : "Özel kriter girildi",
-                              Icons.auto_awesome_outlined,
-                              _buildAiInput(),
-                            ),
-                            _buildActionRow(),
                           ],
+                        ),
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 8),
+                              _buildExpandableCard(
+                                0,
+                                "Şehir Seç",
+                                _isNearby
+                                    ? "📍 Yakınım"
+                                    : (selectedCity ?? "Şehir seçilmedi"),
+                                Icons.location_on_outlined,
+                                _buildCityList(),
+                              ),
+                              if (selectedCity != null && !_isNearby)
+                                _buildExpandableCard(
+                                  1,
+                                  "İlçe Seç",
+                                  selectedDistrict ?? "Tüm ilçeler",
+                                  Icons.map_outlined,
+                                  _buildDistrictScroll(),
+                                ),
+                              _buildExpandableCard(
+                                2,
+                                "Vibe Seçenekleri",
+                                selectedVibes.isEmpty
+                                    ? "Etiket seçilmedi"
+                                    : "${selectedVibes.length} etiket seçildi",
+                                Icons.eco_outlined,
+                                _buildVibeChips(),
+                              ),
+                              _buildExpandableCard(
+                                3,
+                                "Yapay Zeka Asistanı",
+                                aiText.isEmpty
+                                    ? "Mekanı tarif et..."
+                                    : "Özel kriter girildi",
+                                Icons.auto_awesome_outlined,
+                                _buildAiInput(),
+                              ),
+                              _buildActionRow(),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
