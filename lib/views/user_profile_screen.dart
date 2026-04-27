@@ -646,6 +646,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   builder: (_) => CollectionDetailScreen(
                     collectionId: col['id'].toString(),
                     collectionName: col['isim'] ?? "Koleksiyon",
+                    ownerId: col['user_id']?.toString(),
                   ),
                 ),
               ),

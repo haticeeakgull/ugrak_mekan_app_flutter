@@ -11,11 +11,13 @@ const Color _vanilla = Color(0xFFF2EDC2);
 class CollectionDetailScreen extends StatefulWidget {
   final String collectionId;
   final String collectionName;
+  final String? ownerId; // Koleksiyon sahibinin ID'si
 
   const CollectionDetailScreen({
     super.key,
     required this.collectionId,
     required this.collectionName,
+    this.ownerId,
   });
 
   @override
@@ -24,6 +26,18 @@ class CollectionDetailScreen extends StatefulWidget {
 
 class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
+  bool _isOwner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOwnership();
+  }
+
+  void _checkOwnership() {
+    final currentUserId = supabase.auth.currentUser?.id;
+    _isOwner = currentUserId != null && currentUserId == widget.ownerId;
+  }
 
   Future<List<Map<String, dynamic>>> _fetchCollectionItems() async {
     try {
@@ -251,23 +265,24 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
                               ],
                             ),
                           ),
-                          // Sil butonu
-                          GestureDetector(
-                            onTap: () => _showRemoveDialog(item['id']),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.close_rounded,
-                                color: Colors.redAccent,
-                                size: 18,
+                          // Sil butonu - sadece koleksiyon sahibine göster
+                          if (_isOwner)
+                            GestureDetector(
+                              onTap: () => _showRemoveDialog(item['id']),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.redAccent,
+                                  size: 18,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),

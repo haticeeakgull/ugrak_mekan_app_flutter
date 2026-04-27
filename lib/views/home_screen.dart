@@ -65,19 +65,33 @@ class _HomeScreenState extends State<HomeScreen> {
     _appLinks.uriLinkStream.listen((uri) => _handleDeepLink(uri));
   }
 
-  void _handleDeepLink(Uri uri) {
+  Future<void> _handleDeepLink(Uri uri) async {
     if (uri.queryParameters.containsKey('koleksiyonId')) {
       final String? collectionId = uri.queryParameters['koleksiyonId'];
       if (collectionId != null && mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CollectionDetailScreen(
-              collectionId: collectionId,
-              collectionName: "Paylaşılan Koleksiyon",
-            ),
-          ),
-        );
+        // Koleksiyon sahibini öğrenmek için koleksiyonu çek
+        try {
+          final collection = await supabase
+              .from('koleksiyonlar')
+              .select('user_id, isim')
+              .eq('id', collectionId)
+              .maybeSingle();
+          
+          if (mounted && collection != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CollectionDetailScreen(
+                  collectionId: collectionId,
+                  collectionName: collection['isim'] ?? "Paylaşılan Koleksiyon",
+                  ownerId: collection['user_id']?.toString(),
+                ),
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint('Koleksiyon bilgisi alınamadı: $e');
+        }
       }
     }
   }

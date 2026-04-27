@@ -186,17 +186,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     return GestureDetector(
       onTap: isCollection
-          ? () {
-              // Koleksiyon ID'sini alıp detay sayfasına yönlendiriyoruz
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CollectionDetailScreen(
-                    collectionId: msg['collection_id'].toString(),
-                    collectionName: '',
-                  ),
-                ),
-              );
+          ? () async {
+              // Koleksiyon bilgisini çek
+              try {
+                final collection = await _supabase
+                    .from('koleksiyonlar')
+                    .select('user_id, isim')
+                    .eq('id', msg['collection_id'])
+                    .maybeSingle();
+                
+                if (mounted && collection != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CollectionDetailScreen(
+                        collectionId: msg['collection_id'].toString(),
+                        collectionName: collection['isim'] ?? 'Koleksiyon',
+                        ownerId: collection['user_id']?.toString(),
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                debugPrint('Koleksiyon bilgisi alınamadı: $e');
+              }
             }
           : null,
       child: Align(

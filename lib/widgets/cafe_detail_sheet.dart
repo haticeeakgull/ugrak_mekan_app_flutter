@@ -858,41 +858,93 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   }
 
   Widget _buildPhotoGallery() {
-    final allImages = widget.cafe.gorseller
-        .map((g) => g['foto_url'] as String)
-        .toList();
+    return FutureBuilder<List<String>>(
+      future: _getAllCafePhotos(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 150,
+            child: Center(
+              child: CircularProgressIndicator(color: Color(0xFF346739)),
+            ),
+          );
+        }
 
-    if (allImages.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(
-          child: Text(
-            "Henüz fotoğraf yok",
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
+        final allImages = snapshot.data ?? [];
 
-    return SizedBox(
-      height: 150, // Yüksekliği sabitlemek kritik!
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: allImages.length,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        itemBuilder: (context, index) => Container(
-          margin: const EdgeInsets.only(right: 12),
-          width: 150,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            image: DecorationImage(
-              image: NetworkImage(allImages[index]),
-              fit: BoxFit.cover,
+        if (allImages.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: Text(
+                "Henüz fotoğraf yok",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 150,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: allImages.length,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            itemBuilder: (context, index) => Container(
+              margin: const EdgeInsets.only(right: 12),
+              width: 150,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                image: DecorationImage(
+                  image: NetworkImage(allImages[index]),
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  // Kafe fotoğrafları + post fotoğraflarını birleştir
+  Future<List<String>> _getAllCafePhotos() async {
+    List<String> allPhotos = [];
+
+    // 1. Cafe_gorselleri tablosundan fotoğraflar
+    final cafePhotos = widget.cafe.gorseller
+        .map((g) => g['foto_url'] as String)
+        .toList();
+    allPhotos.addAll(cafePhotos);
+
+    // 2. Post fotoğraflarını çek
+    try {
+      final posts = await supabase
+          .from('cafe_postlar')
+          .select('foto_listesi, foto_url')
+          .eq('cafe_id', widget.cafe.id);
+
+      for (var post in posts) {
+        // foto_listesi varsa onu kullan (birden fazla foto)
+        if (post['foto_listesi'] != null) {
+          final List<dynamic> fotoListesi = post['foto_listesi'];
+          for (var foto in fotoListesi) {
+            if (foto != null && foto.toString().isNotEmpty) {
+              allPhotos.add(foto.toString());
+            }
+          }
+        }
+        // foto_url varsa onu da ekle (eski postlar için)
+        else if (post['foto_url'] != null && post['foto_url'].toString().isNotEmpty) {
+          allPhotos.add(post['foto_url'].toString());
+        }
+      }
+    } catch (e) {
+      debugPrint('Post fotoğrafları çekilemedi: $e');
+    }
+
+    // Tekrar eden fotoğrafları kaldır
+    return allPhotos.toSet().toList();
   }
 }
 
