@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CollectionService {
@@ -8,8 +9,8 @@ class CollectionService {
     final bool isOwnProfile = currentUserId == userId;
     
     try {
-      // Koleksiyonları ve ilişkili verileri tek sorguda çek
-      var query = _supabase
+      // 1. Kullanıcının kendi oluşturduğu koleksiyonlar
+      var ownQuery = _supabase
           .from('koleksiyonlar')
           .select('''
             *,
@@ -17,19 +18,64 @@ class CollectionService {
               ilce_isimli_kafeler (
                 id
               )
+            ),
+            profiles:user_id (
+              username
             )
           ''')
           .eq('user_id', userId);
       
       // Başkasının profilindeyse sadece public olanları göster
       if (!isOwnProfile) {
-        query = query.eq('is_public', true);
+        ownQuery = ownQuery.eq('is_public', true);
       }
       
-      final collections = await query.order('isim');
+      final ownCollections = await ownQuery.order('isim');
+      
+      debugPrint('📦 Koleksiyonlar çekildi: ${ownCollections.length} adet');
+      if (ownCollections.isNotEmpty) {
+        debugPrint('   İlk koleksiyon: ${ownCollections[0]}');
+      }
+
+      // 2. Kullanıcının kaydettiği koleksiyonlar (sadece kendi profilinde)
+      List<dynamic> savedCollections = [];
+      if (isOwnProfile) {
+        final savedData = await _supabase
+            .from('saved_collections')
+            .select('''
+              collection_id,
+              koleksiyonlar:collection_id (
+                *,
+                koleksiyon_ogeleri (
+                  ilce_isimli_kafeler (
+                    id
+                  )
+                ),
+                profiles:user_id (
+                  username
+                )
+              )
+            ''')
+            .eq('user_id', userId)
+            .order('saved_at', ascending: false);
+
+        debugPrint('💾 Kaydedilen koleksiyonlar: ${savedData.length} adet');
+
+        // Kaydedilen koleksiyonları düzleştir ve "is_saved" flag'i ekle
+        for (var item in savedData) {
+          if (item['koleksiyonlar'] != null) {
+            var collection = Map<String, dynamic>.from(item['koleksiyonlar']);
+            collection['is_saved'] = true; // Kaydedilmiş koleksiyon işareti
+            savedCollections.add(collection);
+          }
+        }
+      }
+
+      // 3. İki listeyi birleştir
+      final allCollections = [...ownCollections, ...savedCollections];
 
       // Her koleksiyon için kafe fotolarını çek
-      for (var col in collections) {
+      for (var col in allCollections) {
         List<String> photos = [];
         
         try {
@@ -95,7 +141,7 @@ class CollectionService {
         print('✅ Koleksiyon "${col['isim']}": ${photos.length} foto (Storage)');
       }
 
-      return collections;
+      return allCollections;
     } catch (e) {
       print('❌ fetchUserCollections hatası: $e');
       return [];
@@ -119,6 +165,44 @@ class CollectionService {
         .from('koleksiyonlar')
         .update({'is_public': !currentStatus})
         .eq('id', id);
+  }
+
+  // Koleksiyonu kaydet
+  Future<void> saveCollection(String collectionId) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) throw 'Giriş yapmalısınız';
+
+    await _supabase.from('saved_collections').insert({
+      'user_id': userId,
+      'collection_id': collectionId,
+    });
+  }
+
+  // Koleksiyonu kayıtlardan kaldır
+  Future<void> unsaveCollection(String collectionId) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) throw 'Giriş yapmalısınız';
+
+    await _supabase
+        .from('saved_collections')
+        .delete()
+        .eq('user_id', userId)
+        .eq('collection_id', collectionId);
+  }
+
+  // Koleksiyonun kaydedilip kaydedilmediğini kontrol et
+  Future<bool> isCollectionSaved(String collectionId) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return false;
+
+    final result = await _supabase
+        .from('saved_collections')
+        .select()
+        .eq('user_id', userId)
+        .eq('collection_id', collectionId)
+        .maybeSingle();
+
+    return result != null;
   }
 
   Future<void> sendToFriend(

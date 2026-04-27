@@ -22,7 +22,9 @@ class CollectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isPublic = collection['is_public'] ?? true;
+    final bool isSaved = collection['is_saved'] ?? false; // Kaydedilmiş mi?
     final String name = collection['isim'] ?? 'Koleksiyon';
+    final String? ownerUsername = collection['profiles']?['username']; // Koleksiyon sahibi
     final String? coverImage = collection['cover_image_url'];
     final dynamic cafePhotosRaw = collection['cafe_photos'];
     
@@ -189,8 +191,44 @@ class CollectionCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
+                        // Kaydedilmiş koleksiyonsa sahibini göster
+                        if (isSaved && ownerUsername != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.person_outline,
+                                  size: 11,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '@$ownerUsername',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        // Public/Private badge
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,

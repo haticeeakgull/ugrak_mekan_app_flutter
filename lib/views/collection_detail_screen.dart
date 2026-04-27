@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import "package:ugrak_mekan_app/widgets/cafe_detail_sheet.dart";
 import 'package:ugrak_mekan_app/models/cafe_model.dart';
+import 'package:ugrak_mekan_app/services/collection_service.dart';
 
 const Color _deepGreen = Color(0xFF346739);
 const Color _midGreen = Color(0xFF79AE6F);
@@ -26,17 +27,82 @@ class CollectionDetailScreen extends StatefulWidget {
 
 class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
+  final CollectionService _collectionService = CollectionService();
   bool _isOwner = false;
+  bool _isSaved = false;
+  bool _isCheckingSaved = true;
 
   @override
   void initState() {
     super.initState();
     _checkOwnership();
+    _checkIfSaved();
   }
 
   void _checkOwnership() {
     final currentUserId = supabase.auth.currentUser?.id;
     _isOwner = currentUserId != null && currentUserId == widget.ownerId;
+  }
+
+  Future<void> _checkIfSaved() async {
+    if (_isOwner) {
+      // Kendi koleksiyonunu kaydetmeye gerek yok
+      setState(() => _isCheckingSaved = false);
+      return;
+    }
+
+    try {
+      final isSaved = await _collectionService.isCollectionSaved(widget.collectionId);
+      if (mounted) {
+        setState(() {
+          _isSaved = isSaved;
+          _isCheckingSaved = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isCheckingSaved = false);
+      }
+    }
+  }
+
+  Future<void> _toggleSave() async {
+    try {
+      if (_isSaved) {
+        await _collectionService.unsaveCollection(widget.collectionId);
+        if (mounted) {
+          setState(() => _isSaved = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Koleksiyon kayıtlardan kaldırıldı'),
+              backgroundColor: _deepGreen,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        await _collectionService.saveCollection(widget.collectionId);
+        if (mounted) {
+          setState(() => _isSaved = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Koleksiyon kaydedildi! ✨'),
+              backgroundColor: _deepGreen,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchCollectionItems() async {
@@ -100,6 +166,18 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: _deepGreen),
+        actions: [
+          // Kaydet butonu (sadece başkasının koleksiyonunda)
+          if (!_isOwner && !_isCheckingSaved)
+            IconButton(
+              icon: Icon(
+                _isSaved ? Icons.bookmark : Icons.bookmark_border,
+                color: _deepGreen,
+              ),
+              onPressed: _toggleSave,
+              tooltip: _isSaved ? 'Kayıtlardan Kaldır' : 'Kaydet',
+            ),
+        ],
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _fetchCollectionItems(),
