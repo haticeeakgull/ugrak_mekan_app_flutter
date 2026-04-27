@@ -32,7 +32,13 @@ class CafeCardsWidget extends StatelessWidget {
             child: PageView.builder(
               controller: controller.pageController,
               itemCount: controller.kafeler.length,
-              onPageChanged: (index) => controller.onMarkerTapped(index),
+              // PageView açıldığında doğru sayfada başla
+              key: ValueKey(controller.currentCafeIndex),
+              onPageChanged: (index) {
+                // Sadece marker'ı güncelle, kamera hareketini tetikleme
+                controller.currentCafeIndex = index;
+                controller.updateMarkers();
+              },
               itemBuilder: (context, index) =>
                   _buildCard(context, controller.kafeler[index]),
             ),

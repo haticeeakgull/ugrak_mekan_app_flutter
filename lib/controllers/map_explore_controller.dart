@@ -7,7 +7,17 @@ class MapExploreController extends ChangeNotifier {
   final ExploreService _service = ExploreService();
 
   GoogleMapController? mapController;
-  final PageController pageController = PageController(viewportFraction: 0.88);
+  PageController? _pageController;
+  
+  PageController get pageController {
+    if (_pageController == null || !_pageController!.hasClients) {
+      _pageController = PageController(
+        viewportFraction: 0.88,
+        initialPage: currentCafeIndex,
+      );
+    }
+    return _pageController!;
+  }
 
   LatLng userLocation = const LatLng(39.9334, 32.8597); // Türkiye merkezi
   List<dynamic> kafeler = [];
@@ -168,14 +178,21 @@ class MapExploreController extends ChangeNotifier {
   }
 
   void onMarkerTapped(int index) {
+    debugPrint('🎯 Marker tapped: index=$index, cafe=${kafeler[index]['kafe_adi']}');
     currentCafeIndex = index;
     showCafeCards = true;
+    
+    // PageController'ı yeniden oluştur doğru initial page ile
+    _pageController?.dispose();
+    _pageController = PageController(
+      viewportFraction: 0.88,
+      initialPage: index,
+    );
+    debugPrint('📄 New PageController created with initialPage=$index');
+    
     updateMarkers();
 
-    if (pageController.hasClients) {
-      pageController.jumpToPage(index);
-    }
-
+    // Haritayı seçili kafeye odakla
     mapController?.animateCamera(
       CameraUpdate.newLatLng(
         LatLng(
@@ -189,6 +206,18 @@ class MapExploreController extends ChangeNotifier {
 
   void toggleCafeCards(bool show) {
     showCafeCards = show;
+    if (!show) {
+      // Kartlar kapandığında PageController'ı temizle
+      _pageController?.dispose();
+      _pageController = null;
+    }
     notifyListeners();
+  }
+  
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    mapController?.dispose();
+    super.dispose();
   }
 }
