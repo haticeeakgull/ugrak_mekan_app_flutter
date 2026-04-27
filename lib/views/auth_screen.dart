@@ -115,6 +115,11 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Renk paleti
+    const Color deepGreen = Color(0xFF346739);
+    const Color midGreen = Color(0xFF79AE6F);
+    const Color vanilla = Color(0xFFF2EDC2);
+    
     return AppScaffold(
       backgroundColor: Colors.white,
       body: Center(
@@ -123,14 +128,14 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.coffee_rounded, size: 80, color: Colors.orange),
+              const Icon(Icons.coffee_rounded, size: 80, color: deepGreen),
               const SizedBox(height: 10),
               const Text(
                 "UĞRAK",
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+                  color: deepGreen,
                 ),
               ),
               const SizedBox(height: 30),
@@ -170,7 +175,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _authenticate,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: deepGreen,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -190,14 +195,17 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 16),
 
               // --- VEYA Bölümü ---
-              const Row(
+              Row(
                 children: [
-                  Expanded(child: Divider()),
+                  const Expanded(child: Divider()),
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
-                    child: Text("veya"),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      "veya",
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
                   ),
-                  Expanded(child: Divider()),
+                  const Expanded(child: Divider()),
                 ],
               ),
               const SizedBox(height: 16),
@@ -209,7 +217,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: OutlinedButton(
                   onPressed: _isLoading ? null : _signInWithGoogle,
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.grey),
+                    side: BorderSide(color: midGreen),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -219,13 +227,13 @@ class _AuthScreenState extends State<AuthScreen> {
                     children: [
                       // Logoyu sarmalayıp boyutunu kısıtlıyoruz
                       Image.network(
-                        'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png', // Daha güvenilir bir link
+                        'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
                         height: 20,
                         errorBuilder: (context, error, stackTrace) =>
                             const Icon(
                               Icons.account_circle,
                               size: 20,
-                            ), // Yüklenemezse ikon göster
+                            ),
                       ),
                       const SizedBox(width: 10),
                       const Text(
@@ -243,6 +251,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   _isLogin
                       ? "Hesabın yok mu? Kaydol"
                       : "Zaten üyen misin? Giriş yap",
+                  style: const TextStyle(color: deepGreen),
                 ),
               ),
             ],
