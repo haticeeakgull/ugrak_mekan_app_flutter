@@ -4,9 +4,12 @@ class CollectionService {
   final _supabase = Supabase.instance.client;
 
   Future<List<dynamic>> fetchUserCollections(String userId) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    final bool isOwnProfile = currentUserId == userId;
+    
     try {
       // Koleksiyonları ve ilişkili verileri tek sorguda çek
-      final collections = await _supabase
+      var query = _supabase
           .from('koleksiyonlar')
           .select('''
             *,
@@ -16,8 +19,14 @@ class CollectionService {
               )
             )
           ''')
-          .eq('user_id', userId)
-          .order('isim');
+          .eq('user_id', userId);
+      
+      // Başkasının profilindeyse sadece public olanları göster
+      if (!isOwnProfile) {
+        query = query.eq('is_public', true);
+      }
+      
+      final collections = await query.order('isim');
 
       // Her koleksiyon için kafe fotolarını çek
       for (var col in collections) {

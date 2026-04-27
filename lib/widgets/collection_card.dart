@@ -35,7 +35,7 @@ class CollectionCard extends StatelessWidget {
     }
     
     // Debug
-    print('🎨 Koleksiyon kartı: $name');
+    print('   Koleksiyon kartı: $name');
     print('   Cover: $coverImage');
     print('   Fotolar: $cafePhotos');
     

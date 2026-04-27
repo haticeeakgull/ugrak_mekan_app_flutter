@@ -71,15 +71,28 @@ class _FriendsSearchWidgetState extends State<FriendsSearchWidget> {
                     ),
                     title: Text(_results[index]['username'] ?? "Anonim"),
                     onTap: () {
+                      // Önce kullanıcı bilgisini kaydet (liste temizlenmeden önce)
+                      final selectedUserId = _results[index]['id'];
+                      final selectedUsername = _results[index]['username'];
+                      
+                      debugPrint('🔍 Kullanıcı seçildi: $selectedUsername, ID: $selectedUserId');
+                      
+                      // Sonra listeyi temizle
                       _clearSearch();
+                      
+                      // En son navigate et
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (c) => UserProfileScreen(
-                            targetUserId: _results[index]['id'],
+                            targetUserId: selectedUserId,
                           ),
                         ),
-                      );
+                      ).then((_) {
+                        debugPrint('✅ Profil ekranından geri dönüldü');
+                      }).catchError((error) {
+                        debugPrint('❌ Navigation hatası: $error');
+                      });
                     },
                   ),
                 ),
