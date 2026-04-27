@@ -377,6 +377,21 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
             (ratings['muzik'] ?? 0).toDouble(),
             Colors.pink,
           ),
+          // Sadece değer varsa göster (yeni postlar için)
+          if (ratings.containsKey('cocuklu'))
+            _buildRatingItem(
+              Icons.child_care,
+              "Çocuklu",
+              (ratings['cocuklu'] ?? 0).toDouble(),
+              Colors.orange,
+            ),
+          if (ratings.containsKey('hayvan_dostu'))
+            _buildRatingItem(
+              Icons.pets,
+              "Hayvan Dostu",
+              (ratings['hayvan_dostu'] ?? 0).toDouble(),
+              Colors.brown,
+            ),
 
           const SizedBox(height: 30),
           if (vibes.isNotEmpty) ...[

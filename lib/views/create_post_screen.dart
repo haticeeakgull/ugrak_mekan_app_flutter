@@ -43,6 +43,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   double _internet = 3;
   double _calisma = 3;
   double _muzik = 3;
+  double _cocuklu = 3;
+  double _hayvanDostu = 3;
 
   final List<String> _availableVibes = [
     "Sessiz",
@@ -77,6 +79,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _internet = (deg['internet'] ?? 3).toDouble();
       _calisma = (deg['calisma'] ?? 3).toDouble();
       _muzik = (deg['muzik'] ?? 3).toDouble();
+      _cocuklu = (deg['cocuklu'] ?? 3).toDouble();
+      _hayvanDostu = (deg['hayvan_dostu'] ?? 3).toDouble();
 
       if (deg['secilen_vibeler'] != null) {
         _selectedVibes.addAll(List<String>.from(deg['secilen_vibeler']));
@@ -219,6 +223,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           "internet": _internet.toInt(),
           "calisma": _calisma.toInt(),
           "muzik": _muzik.toInt(),
+          "cocuklu": _cocuklu.toInt(),
+          "hayvan_dostu": _hayvanDostu.toInt(),
           "secilen_vibeler": _selectedVibes,
         },
       };
@@ -304,6 +310,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     Icons.laptop_mac_outlined,
                     _calisma,
                     (v) => setState(() => _calisma = v),
+                  ),
+                  _buildSlider(
+                    "Çocuklu",
+                    Icons.child_care_outlined,
+                    _cocuklu,
+                    (v) => setState(() => _cocuklu = v),
+                  ),
+                  _buildSlider(
+                    "Hayvan Dostu",
+                    Icons.pets_outlined,
+                    _hayvanDostu,
+                    (v) => setState(() => _hayvanDostu = v),
                   ),
                   const SizedBox(height: 25),
                   _buildSectionTitle("Vibe Etiketleri", Icons.mood_outlined),

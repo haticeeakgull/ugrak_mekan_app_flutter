@@ -63,13 +63,7 @@ class ExploreService {
       final res = await _supabase
           .from('cafe_postlar')
           .select('''
-            id,
-            baslik,
-            icerik,
-            foto_url,
-            created_at,
-            user_id,
-            cafe_id,
+            *,
             profiles (username, avatar_url, is_private),
             ilce_isimli_kafeler (kafe_adi, latitude, longitude)
           ''')
