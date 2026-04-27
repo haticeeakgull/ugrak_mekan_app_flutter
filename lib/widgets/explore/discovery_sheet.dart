@@ -43,45 +43,80 @@ class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(35)),
             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 15),
-              // Tutamaç
-              Container(
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Text(
-                  "Sana Özel Keşifler",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
-                    letterSpacing: 0.5,
+          child: widget.discoveryPosts == null
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF346739),
                   ),
-                ),
-              ),
-              Expanded(
-                child: widget.discoveryPosts == null
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF346739),
-                        ),
-                      )
-                    : widget.discoveryPosts!.isEmpty
-                    ? const Center(
-                        child: Text("Henüz keşfedilecek post bulunamadı."),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.only(bottom: 120),
-                        itemCount: widget.discoveryPosts!.length + (widget.isLoading ? 1 : 0),
-                        itemBuilder: (context, index) {
+                )
+              : widget.discoveryPosts!.isEmpty
+              ? CustomScrollView(
+                  controller: scrollController,
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 15),
+                          Container(
+                            width: 50,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Text(
+                              "Sana Özel Keşifler",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 100),
+                          const Text("Henüz keşfedilecek post bulunamadı."),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : CustomScrollView(
+                  controller: scrollController,
+                  slivers: [
+                    // Header (tutamaç ve başlık) - scrollable içinde
+                    SliverToBoxAdapter(
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 15),
+                          Container(
+                            width: 50,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Text(
+                              "Sana Özel Keşifler",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Post listesi
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
                           if (index == widget.discoveryPosts!.length) {
                             return const Center(
                               child: Padding(
@@ -98,10 +133,14 @@ class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
                             index,
                           );
                         },
+                        childCount: widget.discoveryPosts!.length + (widget.isLoading ? 1 : 0),
                       ),
-              ),
-            ],
-          ),
+                    ),
+                    const SliverPadding(
+                      padding: EdgeInsets.only(bottom: 120),
+                    ),
+                  ],
+                ),
         );
       },
     );
