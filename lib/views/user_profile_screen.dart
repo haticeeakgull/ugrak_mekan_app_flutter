@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/follow_list_screen.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
@@ -180,6 +182,152 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       col['id'].toString(),
       col['isim'] ?? "Koleksiyon",
     );
+  }
+
+  Future<void> _changeCoverImage(String collectionId) async {
+    try {
+      // 1. Fotoğraf seç
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image == null) return;
+
+      // 2. Fotoğrafı kırp (profil fotoğrafı gibi)
+      final CroppedFile? croppedFile = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Kapak Fotoğrafını Düzenle',
+            toolbarColor: const Color(0xFF346739),
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.ratio16x9,
+            lockAspectRatio: false,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio16x9,
+              CropAspectRatioPreset.ratio4x3,
+            ],
+          ),
+          IOSUiSettings(
+            title: 'Kapak Fotoğrafını Düzenle',
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio16x9,
+              CropAspectRatioPreset.ratio4x3,
+            ],
+          ),
+        ],
+      );
+
+      if (croppedFile == null) return;
+
+      // 3. Loading göster
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(color: Color(0xFF346739)),
+          ),
+        );
+      }
+
+      // 4. Fotoğrafı yükle
+      await _collectionService.updateCoverImage(collectionId, croppedFile.path);
+
+      // 5. Loading kapat ve başarı mesajı göster
+      if (mounted) {
+        Navigator.pop(context); // Loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kapak fotoğrafı güncellendi! ✨'),
+            backgroundColor: Color(0xFF346739),
+          ),
+        );
+        _loadAllProfileData(); // Sayfayı yenile
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Loading dialog (varsa)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeCoverImage(String collectionId) async {
+    // Onay dialogu göster
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Kapak Fotoğrafını Kaldır'),
+        content: const Text(
+          'Kapak fotoğrafını kaldırmak istediğine emin misin? Koleksiyondaki kafe fotoğrafları gösterilecek.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Kaldır'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // Loading göster
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(color: Color(0xFF346739)),
+          ),
+        );
+      }
+
+      // Kapak fotoğrafını kaldır
+      await _collectionService.removeCoverImage(collectionId);
+
+      // Loading kapat ve başarı mesajı göster
+      if (mounted) {
+        Navigator.pop(context); // Loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kapak fotoğrafı kaldırıldı'),
+            backgroundColor: Color(0xFF346739),
+          ),
+        );
+        _loadAllProfileData(); // Sayfayı yenile
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Loading dialog (varsa)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildNotificationBadge() {
@@ -661,6 +809,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     col['is_public'] ?? true,
                   );
                   _loadAllProfileData();
+                } else if (val == 'cover') {
+                  await _changeCoverImage(col['id'].toString());
+                } else if (val == 'remove_cover') {
+                  await _removeCoverImage(col['id'].toString());
                 }
               },
             );

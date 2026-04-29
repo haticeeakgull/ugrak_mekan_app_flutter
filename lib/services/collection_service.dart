@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -218,5 +219,44 @@ class CollectionService {
       'is_collection': true,
       'collection_id': colId,
     });
+  }
+
+  // Kapak fotoğrafını güncelle
+  Future<String> updateCoverImage(String collectionId, String imagePath) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) throw 'Giriş yapmalısınız';
+
+    // Dosyayı Supabase Storage'a yükle
+    final fileName = 'cover_${collectionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final storagePath = 'collection_covers/$userId/$fileName';
+
+    await _supabase.storage.from('posts').upload(
+      storagePath,
+      File(imagePath),
+      fileOptions: const FileOptions(upsert: true),
+    );
+
+    // Public URL al
+    final publicUrl = _supabase.storage.from('posts').getPublicUrl(storagePath);
+
+    // Veritabanını güncelle
+    await _supabase
+        .from('koleksiyonlar')
+        .update({'cover_image_url': publicUrl})
+        .eq('id', collectionId);
+
+    return publicUrl;
+  }
+
+  // Kapak fotoğrafını kaldır
+  Future<void> removeCoverImage(String collectionId) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) throw 'Giriş yapmalısınız';
+
+    // Veritabanından cover_image_url'i null yap
+    await _supabase
+        .from('koleksiyonlar')
+        .update({'cover_image_url': null})
+        .eq('id', collectionId);
   }
 }

@@ -125,6 +125,49 @@ class CollectionCard extends StatelessWidget {
                             ),
                             onSelected: onMenuSelected,
                             itemBuilder: (_) => [
+                              // Kapak fotoğrafı varsa "Kaldır", yoksa "Ekle"
+                              if (coverImage != null && coverImage.isNotEmpty)
+                                PopupMenuItem(
+                                  value: 'remove_cover',
+                                  child: Row(
+                                    children: const [
+                                      Icon(
+                                        Icons.hide_image_rounded,
+                                        size: 16,
+                                        color: Colors.orange,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Kapak Fotoğrafını Kaldır',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.orange,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                PopupMenuItem(
+                                  value: 'cover',
+                                  child: Row(
+                                    children: const [
+                                      Icon(
+                                        Icons.photo_camera_rounded,
+                                        size: 16,
+                                        color: _deepGreen,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Kapak Fotoğrafı Ekle',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: _deepGreen,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               PopupMenuItem(
                                 value: 'privacy',
                                 child: Row(
