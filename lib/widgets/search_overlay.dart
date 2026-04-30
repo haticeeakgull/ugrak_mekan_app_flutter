@@ -45,7 +45,8 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   List<String> _filteredIlceler = [];
   bool _isLoadingIlceler = false;
 
-  final TextEditingController aiController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final SupabaseService _supabaseService = SupabaseService();
 
   final Color deepGreen = const Color(0xFF346739);
@@ -55,16 +56,53 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
 
   static const List<String> _sehirler = ['İstanbul', 'Ankara', 'İzmir'];
 
-  void _triggerSearch() {
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _triggerSearch({bool useAI = false}) {
     final String? ilParam = _isNearby ? _nearbyCity : selectedCity;
+    final String searchText = _searchController.text.trim();
+    
+    // AI kullanılıyorsa searchText'i gönder, değilse boş string
+    // Home screen bu parametreyi kullanarak hangi arama metodunu çağıracağına karar verecek
     widget.onSearch(
       ilParam,
       selectedDistrict != null ? [selectedDistrict!] : [],
       selectedVibes,
-      aiText,
+      useAI ? searchText : '', // AI ise text gönder, değilse boş
       _isNearby ? _userLat : null,
       _isNearby ? _userLng : null,
     );
+  }
+  
+  void _triggerDirectSearch() {
+    // Direct search without AI - but we need to pass the search text differently
+    final String? ilParam = _isNearby ? _nearbyCity : selectedCity;
+    final String searchText = _searchController.text.trim();
+    
+    // Normal aramada searchText'i özel bir formatta gönderelim
+    // Örneğin "DIRECT:" prefix'i ile
+    widget.onSearch(
+      ilParam,
+      selectedDistrict != null ? [selectedDistrict!] : [],
+      selectedVibes,
+      'DIRECT:$searchText', // DIRECT prefix'i ile normal arama olduğunu belirt
+      _isNearby ? _userLat : null,
+      _isNearby ? _userLng : null,
+    );
+  }
+  
+  void _triggerAISearch() {
+    // AI-assisted search
+    if (_searchController.text.trim().isEmpty) {
+      _showSnack('Lütfen bir arama metni girin');
+      return;
+    }
+    _triggerSearch(useAI: true);
   }
 
   Future<void> _onCitySelected(String city) async {
@@ -248,15 +286,6 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                                     : "${selectedVibes.length} etiket seçildi",
                                 Icons.eco_outlined,
                                 _buildVibeChips(),
-                              ),
-                              _buildExpandableCard(
-                                3,
-                                "Yapay Zeka Asistanı",
-                                aiText.isEmpty
-                                    ? "Mekanı tarif et..."
-                                    : "Özel kriter girildi",
-                                Icons.auto_awesome_outlined,
-                                _buildAiInput(),
                               ),
                               _buildActionRow(),
                             ],
@@ -519,28 +548,6 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     );
   }
 
-  Widget _buildAiInput() {
-    return TextField(
-      controller: aiController,
-      maxLines: 2,
-      onChanged: (v) {
-        aiText = v;
-        // arama yapma, "Uygula"ya bırak
-      },
-      style: TextStyle(fontSize: 14, color: deepGreen),
-      decoration: InputDecoration(
-        hintText: "Örn: Kedili kafe veya loş ışıklı bir yer...",
-        hintStyle: TextStyle(color: deepGreen.withOpacity(0.4)),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.3),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-
   Widget _buildActionRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -553,8 +560,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                 selectedCity = null;
                 selectedDistrict = null;
                 selectedVibes.clear();
-                aiText = "";
-                aiController.clear();
+                _searchController.clear();
                 expandedIndex = null;
                 _isNearby = false;
                 _nearbyCity = null;
@@ -574,7 +580,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
           ),
           ElevatedButton(
             onPressed: () {
-              _triggerSearch();
+              _triggerDirectSearch();
               setState(() => isPanelOpen = false);
               widget.onPanelToggle?.call(false);
             },
@@ -724,62 +730,98 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   }
 
   Widget _buildHeroSearchBar() {
-    return GestureDetector(
-      onTap: () {
-        final newState = !isPanelOpen;
-        setState(() => isPanelOpen = newState);
-        widget.onPanelToggle?.call(newState);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(isPanelOpen ? 15 : 30),
-          border: Border.all(color: midGreen.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: deepGreen.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.search_rounded, color: deepGreen),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _buildSearchBarLabel(),
-                style: TextStyle(
-                  color: deepGreen.withOpacity(0.7),
-                  fontWeight: FontWeight.w600,
-                ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: midGreen.withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: deepGreen.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, color: deepGreen, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              style: TextStyle(
+                color: deepGreen,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
               ),
+              decoration: InputDecoration(
+                hintText: 'Mekan ara veya tarif et...',
+                hintStyle: TextStyle(
+                  color: deepGreen.withOpacity(0.5),
+                  fontWeight: FontWeight.w500,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onSubmitted: (value) {
+                // Enter tuşuna basıldığında direkt arama
+                if (value.trim().isNotEmpty) {
+                  _triggerDirectSearch();
+                }
+              },
             ),
-            Icon(
-              isPanelOpen ? Icons.close : Icons.tune_rounded,
-              color: deepGreen,
-              size: 20,
+          ),
+          const SizedBox(width: 8),
+          // AI Button
+          Container(
+            decoration: BoxDecoration(
+              color: deepGreen.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
-        ),
+            child: IconButton(
+              onPressed: _triggerAISearch,
+              icon: Icon(
+                Icons.auto_awesome_rounded,
+                color: deepGreen,
+                size: 20,
+              ),
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+              tooltip: 'AI ile ara',
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Filter toggle button
+          Container(
+            decoration: BoxDecoration(
+              color: isPanelOpen 
+                  ? deepGreen.withOpacity(0.15) 
+                  : deepGreen.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              onPressed: () {
+                final newState = !isPanelOpen;
+                setState(() => isPanelOpen = newState);
+                widget.onPanelToggle?.call(newState);
+              },
+              icon: Icon(
+                isPanelOpen ? Icons.close : Icons.tune_rounded,
+                color: deepGreen,
+                size: 20,
+              ),
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+              tooltip: isPanelOpen ? 'Filtreleri kapat' : 'Filtreleri aç',
+            ),
+          ),
+        ],
       ),
     );
-  }
-
-  String _buildSearchBarLabel() {
-    final parts = <String>[];
-    if (_isNearby) {
-      parts.add('📍 Yakınım${_nearbyCity != null ? ' (${ _nearbyCity!})' : ''}');
-    } else if (selectedCity != null) {
-      parts.add(selectedCity!);
-    }
-    if (selectedDistrict != null) parts.add(selectedDistrict!);
-    if (selectedVibes.isNotEmpty) parts.add(selectedVibes.join(', '));
-    if (aiText.isNotEmpty) parts.add('"$aiText"');
-    return parts.isEmpty ? 'Hemen ara...' : parts.join(' · ');
   }
 }

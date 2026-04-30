@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import '../services/embedding_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String? cafeId;
@@ -29,6 +30,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   final _supabase = Supabase.instance.client;
   final _picker = ImagePicker();
+  final _embeddingService = EmbeddingService();
 
   String? _selectedCafeId;
   String? _selectedCafeName;
@@ -234,10 +236,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             .from('cafe_postlar')
             .update(data)
             .eq('id', widget.initialPostData!['id']);
+        
+        // Edit modunda da embedding güncelle
+        final postId = widget.initialPostData!['id'];
+        final icerik = '${_titleController.text.trim()} ${_contentController.text.trim()}';
+        _embeddingService.createPostEmbedding(postId, icerik).catchError((e) {
+          debugPrint("⚠️ Post embedding güncellenemedi: $e");
+        });
+        
         if (mounted) Navigator.pop(context, data);
       } else {
         data['paylasim_tarihi'] = DateTime.now().toIso8601String();
-        await _supabase.from('cafe_postlar').insert(data);
+        final postData = await _supabase.from('cafe_postlar').insert(data).select().single();
+        
+        // Yeni post için embedding oluştur (arka planda)
+        final postId = postData['id'];
+        final icerik = '${_titleController.text.trim()} ${_contentController.text.trim()}';
+        _embeddingService.createPostEmbedding(postId, icerik).catchError((e) {
+          debugPrint("⚠️ Post embedding oluşturulamadı: $e");
+        });
+        
         if (mounted) Navigator.pop(context, true);
       }
     } catch (e) {

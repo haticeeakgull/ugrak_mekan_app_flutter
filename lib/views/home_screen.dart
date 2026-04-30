@@ -129,15 +129,50 @@ class _HomeScreenState extends State<HomeScreen> {
     double? userLng,
   ) async {
     setState(() => _isLoading = true);
+    
     try {
-      final results = await _apiService.searchCafes(
-        dogalDil.isEmpty ? 'kafe' : dogalDil,
-        il: il,
-        semt: ilceler.isNotEmpty ? ilceler.first : null,
-        vibe: vibeler.isNotEmpty ? vibeler.first : null,
-        userLat: userLat,
-        userLng: userLng,
-      );
+      List<Cafe> results;
+      
+      // DIRECT: prefix'i varsa normal arama, yoksa AI arama
+      if (dogalDil.startsWith('DIRECT:')) {
+        // Normal arama - Ada göre
+        final searchQuery = dogalDil.replaceFirst('DIRECT:', '');
+        debugPrint('🔍 Normal arama yapılıyor: "$searchQuery"');
+        
+        results = await _apiService.searchCafesByName(
+          searchQuery.isEmpty ? 'kafe' : searchQuery,
+          il: il,
+          semt: ilceler.isNotEmpty ? ilceler.first : null,
+          vibe: vibeler.isNotEmpty ? vibeler.first : null,
+          userLat: userLat,
+          userLng: userLng,
+        );
+      } else if (dogalDil.isNotEmpty) {
+        // AI arama - Semantik anlam + yorumlar
+        debugPrint('🤖 AI arama yapılıyor: "$dogalDil"');
+        
+        results = await _apiService.searchCafes(
+          dogalDil,
+          il: il,
+          semt: ilceler.isNotEmpty ? ilceler.first : null,
+          vibe: vibeler.isNotEmpty ? vibeler.first : null,
+          userLat: userLat,
+          userLng: userLng,
+        );
+      } else {
+        // Sadece filtrelerle arama (AI değil)
+        debugPrint('🔍 Filtre bazlı arama yapılıyor');
+        
+        results = await _apiService.searchCafesByName(
+          'kafe',
+          il: il,
+          semt: ilceler.isNotEmpty ? ilceler.first : null,
+          vibe: vibeler.isNotEmpty ? vibeler.first : null,
+          userLat: userLat,
+          userLng: userLng,
+        );
+      }
+      
       setState(() {
         _results = results;
         _isLoading = false;

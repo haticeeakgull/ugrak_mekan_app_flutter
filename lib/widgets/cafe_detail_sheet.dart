@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/embedding_service.dart';
 
 class CafeDetailSheet extends StatefulWidget {
   final Cafe cafe;
@@ -30,6 +31,7 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
   late TabController _tabController;
   final TextEditingController _commentController = TextEditingController();
   final SupabaseClient supabase = Supabase.instance.client;
+  final EmbeddingService _embeddingService = EmbeddingService();
   bool _isSending = false;
   bool _isLoadingLocation = false;
 
@@ -194,14 +196,17 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       final user = supabase.auth.currentUser;
       if (user == null) throw "Giriş yapın.";
 
-      await supabase.from('cafe_yorumlar').insert({
+      final yorumData = await supabase.from('cafe_yorumlar').insert({
         'cafe_id': widget.cafe.id,
         'kullanici_id': user.id,
         'yorum_metni': commentText,
-      });
+      }).select().single();
 
-      // Embedding sync'i arka planda tetikle
-      _triggerEmbeddingSync();
+      // Embedding oluştur (arka planda)
+      final yorumId = yorumData['id'];
+      _embeddingService.createYorumEmbedding(yorumId, commentText).catchError((e) {
+        debugPrint("⚠️ Yorum embedding oluşturulamadı: $e");
+      });
 
       _commentController.clear();
       FocusScope.of(context).unfocus();
