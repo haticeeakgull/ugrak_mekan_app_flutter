@@ -7,6 +7,7 @@ import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/collection_service.dart';
 import '../services/follow_service.dart';
+import '../services/admin_service.dart';
 import '../widgets/share_sheet.dart';
 import '../widgets/collection_card.dart';
 import '../widgets/profile_widgets.dart';
@@ -15,6 +16,8 @@ import 'notifications_screen.dart';
 import 'complete_profile_screen.dart';
 import 'create_post_screen.dart';
 import 'collection_detail_screen.dart';
+import 'admin_panel_screen.dart';
+import 'report_missing_cafe_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String? targetUserId;
@@ -28,12 +31,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final _supabase = Supabase.instance.client;
   final CollectionService _collectionService = CollectionService();
   final FollowService _followService = FollowService();
+  final AdminService _adminService = AdminService();
 
   bool _isLoading = true;
   String _followStatus = "none";
   Map<String, dynamic>? _profileData;
   List<dynamic> _userPosts = [];
   List<dynamic> _userCollections = [];
+
+  Future<bool> _checkIfAdmin() async {
+    return await _adminService.isAdmin();
+  }
 
   @override
   void initState() {
@@ -506,11 +514,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => const ChatListScreen()),
               ),
+              tooltip: 'Mesajlar',
             ),
             _buildNotificationBadge(),
             IconButton(
-              icon: const Icon(Icons.logout, color: Colors.black),
-              onPressed: _showLogoutDialog,
+              icon: const Icon(Icons.settings_outlined, color: Colors.black),
+              onPressed: _showSettingsSheet,
+              tooltip: 'Ayarlar',
             ),
           ],
         ],
@@ -738,6 +748,203 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  void _showSettingsSheet() async {
+    final isAdmin = await _checkIfAdmin();
+    
+    if (!mounted) return;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Başlık
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Icon(Icons.settings, color: const Color(0xFF346739), size: 28),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Ayarlar',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Admin Panel (sadece admin ise)
+            if (isAdmin)
+              _buildSettingsItem(
+                icon: Icons.admin_panel_settings,
+                title: 'Admin Panel',
+                subtitle: 'Bildirimleri yönet',
+                color: Colors.purple,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AdminPanelScreen(),
+                    ),
+                  );
+                },
+              ),
+            
+            // Eksik Kafe Bildir
+            _buildSettingsItem(
+              icon: Icons.add_location_alt,
+              title: 'Eksik Kafe Bildir',
+              subtitle: 'Yeni kafe öner',
+              color: const Color(0xFF346739),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    fullscreenDialog: true,
+                    builder: (_) => const ReportMissingCafeScreen(),
+                  ),
+                );
+              },
+            ),
+            
+            // Çıkış Yap
+            _buildSettingsItem(
+              icon: Icons.logout,
+              title: 'Çıkış Yap',
+              subtitle: 'Hesaptan çık',
+              color: Colors.red,
+              onTap: () {
+                Navigator.pop(context);
+                _showLogoutDialog();
+              },
+            ),
+            
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey[400]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 24, color: const Color(0xFF346739)),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showReportMissingCafeDialog() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const ReportMissingCafeScreen(),
       ),
     );
   }
