@@ -116,25 +116,28 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     if (confirm != true) return;
 
     try {
-      // Önce UI'dan kaldır (optimistic update)
-      setState(() {
-        _bildirimler.removeWhere((item) => item['id'] == id);
-      });
-
-      // Sonra veritabanından sil
-      await _supabase
+      debugPrint('🔄 Silme işlemi başlatılıyor - ID: $id');
+      
+      // Veritabanından sil - count kullanarak silinen satır sayısını al
+      final response = await _supabase
           .from('eksik_kafe_bildirimleri')
           .delete()
-          .eq('id', id);
+          .eq('id', id)
+          .select();
 
+      debugPrint('✅ Silme yanıtı: $response');
+
+      // UI'dan kaldır
       if (mounted) {
-        _showSnackBar('✅ Bildirim silindi');
+        setState(() {
+          _bildirimler.removeWhere((item) => item['id'] == id);
+        });
+        _showSnackBar('✅ Bildirim kalıcı olarak silindi');
       }
     } catch (e) {
-      // Hata olursa listeyi yeniden yükle
+      debugPrint('❌ Silme hatası - ID: $id, Hata: $e');
       if (mounted) {
-        _showSnackBar('❌ Hata: ${e.toString()}', isError: true);
-        await _loadBildirimler();
+        _showSnackBar('❌ Silme hatası: ${e.toString()}', isError: true);
       }
     }
   }
@@ -426,9 +429,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         children: [
           // Filtre ve Export Butonları
           Container(
-            color: Colors.white,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
+              color: Colors.white,
               border: Border(
                 bottom: BorderSide(
                   color: midGreen.withOpacity(0.2),

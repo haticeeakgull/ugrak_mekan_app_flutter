@@ -34,6 +34,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final AdminService _adminService = AdminService();
 
   bool _isLoading = true;
+  bool _isAdmin = false;
   String _followStatus = "none";
   Map<String, dynamic>? _profileData;
   List<dynamic> _userPosts = [];
@@ -47,6 +48,39 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     _loadAllProfileData();
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _checkIfAdmin();
+    if (mounted) {
+      setState(() => _isAdmin = isAdmin);
+    }
+  }
+
+  void _handleMenuSelection(String value) {
+    switch (value) {
+      case 'admin':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AdminPanelScreen(),
+          ),
+        );
+        break;
+      case 'report_cafe':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => const ReportMissingCafeScreen(),
+          ),
+        );
+        break;
+      case 'logout':
+        _showLogoutDialog();
+        break;
+    }
   }
 
   // Future<List<Map<String, dynamic>>> fetchUserBadges(String userId) async {
@@ -517,10 +551,97 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               tooltip: 'Mesajlar',
             ),
             _buildNotificationBadge(),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.black),
-              onPressed: _showSettingsSheet,
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.black),
               tooltip: 'Ayarlar',
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              offset: const Offset(0, 50),
+              onSelected: (value) => _handleMenuSelection(value),
+              itemBuilder: (context) => [
+                // Admin Panel (sadece admin ise)
+                if (_isAdmin)
+                  PopupMenuItem<String>(
+                    value: 'admin',
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings,
+                            color: Colors.purple,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Admin Panel',
+                          style: TextStyle(fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  ),
+                // Eksik Kafe Bildir
+                PopupMenuItem<String>(
+                  value: 'report_cafe',
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF346739).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.add_location_alt,
+                          color: Color(0xFF346739),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Eksik Kafe Bildir',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ],
+                  ),
+                ),
+                // Divider
+                const PopupMenuDivider(),
+                // Çıkış Yap
+                PopupMenuItem<String>(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.logout,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Çıkış Yap',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ],
@@ -748,160 +869,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  void _showSettingsSheet() async {
-    final isAdmin = await _checkIfAdmin();
-    
-    if (!mounted) return;
-    
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Başlık
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Icon(Icons.settings, color: const Color(0xFF346739), size: 28),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Ayarlar',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Admin Panel (sadece admin ise)
-            if (isAdmin)
-              _buildSettingsItem(
-                icon: Icons.admin_panel_settings,
-                title: 'Admin Panel',
-                subtitle: 'Bildirimleri yönet',
-                color: Colors.purple,
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AdminPanelScreen(),
-                    ),
-                  );
-                },
-              ),
-            
-            // Eksik Kafe Bildir
-            _buildSettingsItem(
-              icon: Icons.add_location_alt,
-              title: 'Eksik Kafe Bildir',
-              subtitle: 'Yeni kafe öner',
-              color: const Color(0xFF346739),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    fullscreenDialog: true,
-                    builder: (_) => const ReportMissingCafeScreen(),
-                  ),
-                );
-              },
-            ),
-            
-            // Çıkış Yap
-            _buildSettingsItem(
-              icon: Icons.logout,
-              title: 'Çıkış Yap',
-              subtitle: 'Hesaptan çık',
-              color: Colors.red,
-              onTap: () {
-                Navigator.pop(context);
-                _showLogoutDialog();
-              },
-            ),
-            
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingsItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: Colors.grey[400]),
-          ],
-        ),
       ),
     );
   }
