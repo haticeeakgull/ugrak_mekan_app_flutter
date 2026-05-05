@@ -17,7 +17,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   
   List<Map<String, dynamic>> _bildirimler = [];
   bool _isLoading = true;
-  String _selectedFilter = 'beklemede';
+  String _selectedFilter = 'istekler'; // beklemede yerine istekler
 
   final Color deepGreen = const Color(0xFF346739);
   final Color midGreen = const Color(0xFF79AE6F);
@@ -33,13 +33,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     setState(() => _isLoading = true);
     
     try {
-      // Admin tüm bildirimleri görebilir
-      // auth.users tablosundan email çek (profiles değil)
-      final data = await _supabase
-          .from('eksik_kafe_bildirimleri')
-          .select('*')
-          .eq('durum', _selectedFilter)
-          .order('created_at', ascending: false);
+      List<dynamic> data;
+      
+      // İstekler: beklemede VE inceleniyor
+      if (_selectedFilter == 'istekler') {
+        data = await _supabase
+            .from('eksik_kafe_bildirimleri')
+            .select('*')
+            .inFilter('durum', ['beklemede', 'inceleniyor'])
+            .order('created_at', ascending: false);
+      } else {
+        // Onaylananlar veya Reddedilenler
+        final durumMap = {
+          'onaylananlar': 'eklendi',
+          'reddedilenler': 'reddedildi',
+        };
+        data = await _supabase
+            .from('eksik_kafe_bildirimleri')
+            .select('*')
+            .eq('durum', durumMap[_selectedFilter]!)
+            .order('created_at', ascending: false);
+      }
 
       // Email bilgilerini ayrı çek
       final List<Map<String, dynamic>> enrichedData = [];
@@ -69,6 +83,59 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       debugPrint('❌ Bildirimler yüklenemedi: $e');
       setState(() => _isLoading = false);
       _showSnackBar('Hata: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<void> _deleteBildirim(String id, String kafeAdi) async {
+    // Onay dialogu
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Bildirimi Sil'),
+        content: Text(
+          '"$kafeAdi" bildirimini kalıcı olarak silmek istediğine emin misin?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // Önce UI'dan kaldır (optimistic update)
+      setState(() {
+        _bildirimler.removeWhere((item) => item['id'] == id);
+      });
+
+      // Sonra veritabanından sil
+      await _supabase
+          .from('eksik_kafe_bildirimleri')
+          .delete()
+          .eq('id', id);
+
+      if (mounted) {
+        _showSnackBar('✅ Bildirim silindi');
+      }
+    } catch (e) {
+      // Hata olursa listeyi yeniden yükle
+      if (mounted) {
+        _showSnackBar('❌ Hata: ${e.toString()}', isError: true);
+        await _loadBildirimler();
+      }
     }
   }
 
@@ -376,10 +443,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _buildFilterChip('beklemede', '⏳ Beklemede'),
-                      _buildFilterChip('inceleniyor', '🔍 İnceleniyor'),
-                      _buildFilterChip('eklendi', '✅ Eklendi'),
-                      _buildFilterChip('reddedildi', '❌ Reddedildi'),
+                      _buildFilterChip('istekler', '📋 İstekler'),
+                      _buildFilterChip('onaylananlar', '✅ Onaylananlar'),
+                      _buildFilterChip('reddedilenler', '❌ Reddedilenler'),
                     ],
                   ),
                 ),
@@ -472,6 +538,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Widget _buildEmptyState() {
+    String message = 'Henüz bildirim yok';
+    String subtitle = 'Bu kategoride bildirim bulunmuyor';
+    
+    if (_selectedFilter == 'istekler') {
+      message = 'Yeni istek yok';
+      subtitle = 'Kullanıcılardan gelen istekler burada görünecek';
+    } else if (_selectedFilter == 'onaylananlar') {
+      message = 'Henüz onaylanan yok';
+      subtitle = 'Onayladığın kafeler burada görünecek';
+    } else if (_selectedFilter == 'reddedilenler') {
+      message = 'Henüz reddedilen yok';
+      subtitle = 'Reddettiğin istekler burada görünecek';
+    }
+    
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -479,7 +559,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           Icon(Icons.inbox_outlined, size: 80, color: deepGreen.withOpacity(0.3)),
           const SizedBox(height: 16),
           Text(
-            'Henüz bildirim yok',
+            message,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -488,7 +568,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Bu durumda bildirim bulunmuyor',
+            subtitle,
             style: TextStyle(
               fontSize: 14,
               color: deepGreen.withOpacity(0.6),
@@ -721,6 +801,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               // Aksiyon Butonları
               Row(
                 children: [
+                  // İSTEKLER sekmesinde (beklemede veya inceleniyor)
                   if (durum == 'beklemede') ...[
                     Expanded(
                       child: ElevatedButton.icon(
@@ -735,22 +816,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 0,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _updateDurum(bildirim['id'], 'reddedildi'),
-                        icon: const Icon(Icons.cancel, size: 18),
-                        label: const Text('Reddet'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                         ),
                       ),
                     ),
@@ -774,6 +839,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _updateDurum(bildirim['id'], 'eklendi'),
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Onayla'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _updateDurum(bildirim['id'], 'reddedildi'),
                         icon: const Icon(Icons.cancel, size: 18),
@@ -789,6 +871,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       ),
                     ),
                   ],
+                  
+                  // ONAYLANANLAR sekmesinde
                   if (durum == 'eklendi') ...[
                     Expanded(
                       child: Container(
@@ -814,7 +898,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => _deleteBildirim(bildirim['id'], kafeAdi),
+                      icon: const Icon(Icons.delete_outline),
+                      color: Colors.red,
+                      tooltip: 'Sil',
+                    ),
                   ],
+                  
+                  // REDDEDİLENLER sekmesinde
                   if (durum == 'reddedildi') ...[
                     Expanded(
                       child: Container(
@@ -839,6 +932,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => _deleteBildirim(bildirim['id'], kafeAdi),
+                      icon: const Icon(Icons.delete_outline),
+                      color: Colors.red,
+                      tooltip: 'Sil',
                     ),
                   ],
                 ],
