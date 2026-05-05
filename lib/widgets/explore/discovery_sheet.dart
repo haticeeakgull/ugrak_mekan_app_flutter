@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../views/post_detail_screen.dart';
+import '../../views/user_profile_screen.dart';
 
 class DiscoverySheetWidget extends StatefulWidget {
   final List<Map<String, dynamic>>? discoveryPosts;
@@ -197,30 +198,57 @@ class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Kullanıcı Bilgisi
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: const Color(0xFF346739),
-                        child: Text(
-                          username[0].toUpperCase(),
+                  GestureDetector(
+                    onTap: () {
+                      // Kullanıcının profiline git
+                      final userId = post['user_id'];
+                      if (userId != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => UserProfileScreen(
+                              targetUserId: userId,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFF346739),
+                          backgroundImage: post['profiles']?['avatar_url'] != null
+                              ? NetworkImage(post['profiles']['avatar_url'])
+                              : null,
+                          child: post['profiles']?['avatar_url'] == null
+                              ? Text(
+                                  username[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          username,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        username,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white70,
+                          size: 18,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // Başlık
