@@ -122,7 +122,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
       ),
       confirmDismiss: (direction) async {
-        return await showDialog(
+        final confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             shape: RoundedRectangleBorder(
@@ -130,7 +130,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
             title: const Text('Sohbeti Sil'),
             content: Text(
-              '${profile['username']} ile olan sohbeti silmek istediğine emin misin?',
+              '${profile['username']} ile olan sohbeti kalıcı olarak silmek istediğine emin misin?\n\nBu işlem geri alınamaz.',
             ),
             actions: [
               TextButton(
@@ -148,9 +148,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ],
           ),
         );
-      },
-      onDismissed: (direction) async {
-        await _deleteChat(chat['id']);
+        
+        if (confirm == true) {
+          // Silme işlemini yap
+          await _deleteChat(chat['id']);
+          // Stream otomatik güncellenecek
+          return true;
+        }
+        
+        return false;
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -234,26 +240,39 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   Future<void> _deleteChat(String chatId) async {
     try {
-      // Önce chat'e ait mesajları sil
-      await _supabase.from('messages').delete().eq('chat_id', chatId);
+      // Önce mesajları sil
+      final messagesDelete = await _supabase
+          .from('messages')
+          .delete()
+          .eq('chat_id', chatId);
+      
+      debugPrint('Mesajlar silindi: $messagesDelete');
       
       // Sonra chat'i sil
-      await _supabase.from('chats').delete().eq('id', chatId);
+      final chatDelete = await _supabase
+          .from('chats')
+          .delete()
+          .eq('id', chatId);
+      
+      debugPrint('Chat silindi: $chatDelete');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Sohbet silindi'),
+            content: const Text('✅ Sohbet kalıcı olarak silindi'),
             backgroundColor: deepGreen,
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
+      debugPrint('❌ Silme hatası: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Hata: ${e.toString()}'),
+            content: Text('❌ Silme hatası: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
