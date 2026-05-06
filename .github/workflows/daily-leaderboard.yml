@@ -1,0 +1,38 @@
+name: Daily Leaderboard Update
+
+on:
+  schedule:
+    # Her gün saat 03:00'te çalışır (UTC)
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    # Manuel tetikleme için
+
+jobs:
+  update-leaderboard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install supabase python-dotenv
+
+      - name: Run leaderboard update
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python update_leaderboard.py
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Leaderboard update failed!"
+          # Buraya isterseniz Slack/Discord bildirimi ekleyebilirsiniz

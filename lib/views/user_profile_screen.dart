@@ -9,6 +9,7 @@ import '../services/collection_service.dart';
 import '../services/follow_service.dart';
 import '../services/admin_service.dart';
 import '../services/badge_service.dart';
+import '../services/leaderboard_service.dart';
 import '../widgets/share_sheet.dart';
 import '../widgets/collection_card.dart';
 import '../widgets/profile_widgets.dart';
@@ -19,6 +20,7 @@ import 'create_post_screen.dart';
 import 'collection_detail_screen.dart';
 import 'admin_panel_screen.dart';
 import 'report_missing_cafe_screen.dart';
+import 'leaderboard_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String? targetUserId;
@@ -33,6 +35,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final CollectionService _collectionService = CollectionService();
   final FollowService _followService = FollowService();
   final AdminService _adminService = AdminService();
+  final LeaderboardService _leaderboardService = LeaderboardService();
 
   bool _isLoading = true;
   bool _isAdmin = false;
@@ -40,6 +43,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Map<String, dynamic>? _profileData;
   List<dynamic> _userPosts = [];
   List<dynamic> _userCollections = [];
+  int _userRank = 0;
+  int _userPoints = 0;
 
   Future<bool> _checkIfAdmin() async {
     return await _adminService.isAdmin();
@@ -141,6 +146,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             .eq('user_id', userId)
             .order('paylasim_tarihi', ascending: false),
         _collectionService.fetchUserCollections(userId),
+        _leaderboardService.getUserRank(userId),
       ]);
 
       if (mounted) {
@@ -148,6 +154,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _profileData = results[0] as Map<String, dynamic>?;
           _userPosts = results[1] as List<dynamic>;
           _userCollections = results[2] as List<dynamic>;
+          _userRank = results[3] as int;
+          _userPoints = _profileData?['total_points'] ?? 0;
           _isLoading = false;
         });
       }
@@ -718,41 +726,105 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
+      child: Column(
         children: [
-          // GÜNCELLEDİĞİMİZ KISIM: Profil Fotoğrafı Tıklanabilir ve Hero Efektli
-          GestureDetector(
-            onTap: () => _showFullProfileImage(avatarUrl),
-            child: Hero(
-              tag: 'profile_pic_zoom',
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.grey[200]!, width: 2),
+          Row(
+            children: [
+              // Profil Fotoğrafı
+              GestureDetector(
+                onTap: () => _showFullProfileImage(avatarUrl),
+                child: Hero(
+                  tag: 'profile_pic_zoom',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.grey[200]!, width: 2),
+                    ),
+                    child: CircleAvatar(
+                      radius: 42,
+                      backgroundColor: Colors.grey[100],
+                      backgroundImage: NetworkImage(avatarUrl),
+                    ),
+                  ),
                 ),
-                child: CircleAvatar(
-                  radius: 42,
-                  backgroundColor: Colors.grey[100],
-                  backgroundImage: NetworkImage(avatarUrl),
+              ),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildStatItem(
+                      _userPosts.length.toString(),
+                      "Uğrak",
+                      userId,
+                      -1,
+                    ),
+                    _buildRealtimeStatItem("Takipçi", userId, 0),
+                    _buildRealtimeStatItem("Takip", userId, 1),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Puan ve sıra kartı
+          if (_userPoints > 0) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LeaderboardScreen(),
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF346739),
+                      const Color(0xFF79AE6F),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.emoji_events,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '#$_userRank',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '$_userPoints puan',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatItem(
-                  _userPosts.length.toString(),
-                  "Uğrak",
-                  userId,
-                  -1,
-                ),
-                _buildRealtimeStatItem("Takipçi", userId, 0),
-                _buildRealtimeStatItem("Takip", userId, 1),
-              ],
-            ),
-          ),
+          ],
         ],
       ),
     );
