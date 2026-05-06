@@ -8,6 +8,7 @@ import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/collection_service.dart';
 import '../services/follow_service.dart';
 import '../services/admin_service.dart';
+import '../services/badge_service.dart';
 import '../widgets/share_sheet.dart';
 import '../widgets/collection_card.dart';
 import '../widgets/profile_widgets.dart';
@@ -49,6 +50,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     super.initState();
     _loadAllProfileData();
     _checkAdminStatus();
+    _checkBadges(); // Rozet kontrolü
+  }
+
+  Future<void> _checkBadges() async {
+    final userId = widget.targetUserId ?? _supabase.auth.currentUser?.id;
+    if (userId != null) {
+      BadgeService().checkBadgeProgress(userId).catchError((e) {
+        debugPrint("⚠️ Rozet kontrolü hatası: $e");
+      });
+    }
   }
 
   Future<void> _checkAdminStatus() async {

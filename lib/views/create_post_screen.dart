@@ -5,6 +5,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/embedding_service.dart';
+import '../services/badge_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String? cafeId;
@@ -255,6 +256,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         _embeddingService.createPostEmbedding(postId, icerik).catchError((e) {
           debugPrint("⚠️ Post embedding oluşturulamadı: $e");
         });
+        
+        // Rozet kontrolü yap (arka planda)
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId != null) {
+          BadgeService().checkBadgeProgress(userId).catchError((e) {
+            debugPrint("⚠️ Rozet kontrolü hatası: $e");
+          });
+        }
         
         if (mounted) Navigator.pop(context, true);
       }
