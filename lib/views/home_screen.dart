@@ -38,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ); // Yazılar, İkonlar, Ana Butonlar
   final Color midGreen = const Color(0xFF79AE6F); // Vurgu ve Alt Başlıklar
   final Color lightGreen = const Color(0xFF9FCB98); // Yumuşak geçişler
-  final Color vanilla = const Color(0xFFF2EDC2); // Arka Plan Dokunuşları
+  final Color vanilla = const Color(0xFFFAF8F3); // Arka Plan Dokunuşları
 
   @override
   void initState() {

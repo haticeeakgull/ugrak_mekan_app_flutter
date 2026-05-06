@@ -23,7 +23,7 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
   late LatLng _selectedLocation;
   GoogleMapController? _mapController;
   final Color deepGreen = const Color(0xFF346739);
-  final Color vanilla = const Color(0xFFF2EDC2);
+  final Color vanilla = const Color(0xFFFAF8F3);
 
   @override
   void initState() {

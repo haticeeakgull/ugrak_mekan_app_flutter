@@ -7,7 +7,7 @@ import 'package:ugrak_mekan_app/services/collection_service.dart';
 
 const Color _deepGreen = Color(0xFF346739);
 const Color _midGreen = Color(0xFF79AE6F);
-const Color _vanilla = Color(0xFFF2EDC2);
+const Color _vanilla = Color(0xFFFAF8F3);
 
 class CollectionDetailScreen extends StatefulWidget {
   final String collectionId;

@@ -680,8 +680,121 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     _buildProfileHeader(userId),
                     _buildBioSection(),
                     _buildMainActions(isMe),
-                    const Padding(padding: EdgeInsets.fromLTRB(16, 24, 16, 8)),
-                    if (isMe) buildBadgeSection(userId),
+                    const SizedBox(height: 24),
+                    // Uğrak Başarıları Kartı
+                    if (isMe) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Uğrak Başarıları",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              // Sıralama & Puanlar kartı (başlığın hemen altında)
+                              if (_userPoints > 0) ...[
+                                const SizedBox(height: 12),
+                                GestureDetector(
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const LeaderboardScreen(),
+                                    ),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          const Color(0xFF346739),
+                                          const Color(0xFF79AE6F),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF346739)
+                                              .withOpacity(0.2),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.emoji_events,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'Sıralama & Puanlar',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '#$_userRank • $_userPoints puan',
+                                                  style: const TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        const Icon(
+                                          Icons.chevron_right,
+                                          color: Colors.white70,
+                                          size: 22,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              // Badge'ler (sıralama kartından sonra)
+                              const SizedBox(height: 12),
+                              _buildBadgeList(userId),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -765,66 +878,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ],
           ),
-          // Puan ve sıra kartı
-          if (_userPoints > 0) ...[
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const LeaderboardScreen(),
-                ),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF346739),
-                      const Color(0xFF79AE6F),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.emoji_events,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '#$_userRank',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      '$_userPoints puan',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: Colors.white70,
-                      size: 20,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1143,7 +1196,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final controller = TextEditingController();
     const deepGreen = Color(0xFF346739);
     const midGreen = Color(0xFF79AE6F);
-    const vanilla = Color(0xFFF2EDC2);
+    const vanilla = Color(0xFFFAF8F3);
 
     showDialog(
       context: context,
@@ -1234,6 +1287,94 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBadgeList(String userId) {
+    return SizedBox(
+      height: 100,
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: fetchUserBadges(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
+          }
+
+          final userBadges = snapshot.data ?? [];
+          if (userBadges.isEmpty) {
+            return const Center(
+              child: Text(
+                "Henüz rozet bulunmuyor.",
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: userBadges.length,
+            itemBuilder: (context, index) {
+              final item = userBadges[index];
+              final badgeData = item['badges'];
+              final cafeData = item['ilce_isimli_kafeler'];
+
+              final String iconUrl = badgeData?['icon_url'] ?? '';
+              final String badgeTitle = badgeData?['title'] ?? 'Rozet';
+              final String? cafeName = cafeData?['kafe_adi'];
+
+              return Container(
+                width: 85,
+                margin: const EdgeInsets.only(right: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundColor: const Color(0xFFFAF8F3),
+                      backgroundImage:
+                          iconUrl.isNotEmpty ? NetworkImage(iconUrl) : null,
+                      child: iconUrl.isEmpty
+                          ? const Icon(
+                              Icons.workspace_premium,
+                              color: Color(0xFF79AE6F),
+                              size: 24,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      badgeTitle,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (cafeName != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          cafeName,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

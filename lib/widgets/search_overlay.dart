@@ -52,7 +52,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   final Color deepGreen = const Color(0xFF346739);
   final Color midGreen = const Color(0xFF79AE6F);
   final Color lightGreen = const Color(0xFF9FCB98);
-  final Color vanilla = const Color(0xFFF2EDC2);
+  final Color vanilla = const Color(0xFFFAF8F3);
 
   static const List<String> _sehirler = ['İstanbul', 'Ankara', 'İzmir'];
 
@@ -106,7 +106,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   }
 
   Future<void> _onCitySelected(String city) async {
-    if (city == '📍 Yakınım') {
+    if (city == '📍 Konumum') {
       await _handleNearbySelected();
       return;
     }
@@ -172,7 +172,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
         _filteredIlceler = [];
         _isLoadingLocation = false;
       });
-      // Yakınım seçilince otomatik arama yap (konum alındı, anlamlı)
+      
       _triggerSearch();
     } catch (e) {
       _showSnack('Konum alınamadı.');
@@ -265,7 +265,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                                 0,
                                 "Şehir Seç",
                                 _isNearby
-                                    ? "📍 Yakınım"
+                                    ? "📍 Konumum"
                                     : (selectedCity ?? "Şehir seçilmedi"),
                                 Icons.location_on_outlined,
                                 _buildCityList(),
@@ -428,8 +428,8 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: ['📍 Yakınım', ..._sehirler].map((c) {
-        final isNearbyChip = c == '📍 Yakınım';
+      children: ['📍 Konumum', ..._sehirler].map((c) {
+        final isNearbyChip = c == '📍 Konumum';
         final isSel = isNearbyChip ? _isNearby : selectedCity == c;
         return ChoiceChip(
           label: Text(

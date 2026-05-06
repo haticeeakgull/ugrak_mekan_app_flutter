@@ -24,7 +24,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
   final Color deepGreen = const Color(0xFF346739);
   final Color midGreen = const Color(0xFF79AE6F);
-  final Color vanilla = const Color(0xFFF2EDC2);
+  final Color lightCream = const Color(0xFFFAF8F3); // Daha açık krem-beyaz
 
   @override
   void initState() {
@@ -69,7 +69,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      backgroundColor: vanilla,
+      backgroundColor: lightCream,
       appBar: AppBar(
         title: const Text(
           'Liderlik Tablosu',
@@ -112,27 +112,27 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     return RefreshIndicator(
       color: deepGreen,
       onRefresh: _loadData,
-      child: Column(
+      child: ListView(
+        padding: EdgeInsets.zero,
         children: [
           // Kullanıcının kendi sırası
           _buildMyRankCard(),
 
-          // Top 3 özel kartlar
-          if (_leaderboard.length >= 3) _buildTopThree(),
+          // Top 3 podium
+          if (_leaderboard.length >= 3) _buildTopThreePodium(),
 
-          // Geri kalan liste
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _leaderboard.length - 3,
-              itemBuilder: (context, index) {
-                final actualIndex = index + 3;
-                return _buildLeaderboardItem(
-                  _leaderboard[actualIndex],
-                  actualIndex + 1,
-                );
-              },
-            ),
+          const SizedBox(height: 16),
+
+          // Geri kalan liste (4'ten başlayarak)
+          ...List.generate(
+            _leaderboard.length - 3,
+            (index) {
+              final actualIndex = index + 3;
+              return _buildLeaderboardItem(
+                _leaderboard[actualIndex],
+                actualIndex + 1,
+              );
+            },
           ),
         ],
       ),
@@ -213,38 +213,32 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
-  Widget _buildTopThree() {
+  Widget _buildTopThreePodium() {
     return Container(
-      height: 200,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // 2. sıra
-          Expanded(child: _buildPodiumCard(_leaderboard[1], 2, 160)),
-          const SizedBox(width: 8),
-          // 1. sıra
-          Expanded(child: _buildPodiumCard(_leaderboard[0], 1, 200)),
-          const SizedBox(width: 8),
+          _buildPodiumUser(_leaderboard[1], 2),
+          // 1. sıra (ortada ve daha büyük)
+          _buildPodiumUser(_leaderboard[0], 1),
           // 3. sıra
-          Expanded(child: _buildPodiumCard(_leaderboard[2], 3, 140)),
+          _buildPodiumUser(_leaderboard[2], 3),
         ],
       ),
     );
   }
 
-  Widget _buildPodiumCard(Map<String, dynamic> user, int rank, double height) {
-    final colors = {
-      1: Colors.amber,
-      2: Colors.grey[400]!,
-      3: Colors.brown[300]!,
-    };
-
-    final medals = {
-      1: '🥇',
-      2: '🥈',
-      3: '🥉',
-    };
+  Widget _buildPodiumUser(Map<String, dynamic> user, int rank) {
+    final isFirst = rank == 1;
+    final avatarSize = isFirst ? 80.0 : 70.0;
+    final borderColor = rank == 1
+        ? const Color(0xFFFFD700) // Gold
+        : rank == 2
+            ? const Color(0xFFC0C0C0) // Silver
+            : const Color(0xFFCD7F32); // Bronze
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -253,143 +247,206 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           builder: (_) => UserProfileScreen(targetUserId: user['id']),
         ),
       ),
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors[rank]!, width: 3),
-          boxShadow: [
-            BoxShadow(
-              color: colors[rank]!.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Taç (sadece 1. sıra için)
+          if (isFirst)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Text(
+                '👑',
+                style: TextStyle(fontSize: 28),
+              ),
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              medals[rank]!,
-              style: const TextStyle(fontSize: 32),
-            ),
-            const SizedBox(height: 8),
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: deepGreen.withOpacity(0.1),
-              backgroundImage: user['avatar_url'] != null
-                  ? NetworkImage(user['avatar_url'])
-                  : null,
-              child: user['avatar_url'] == null
-                  ? Icon(Icons.person, color: deepGreen, size: 30)
-                  : null,
-            ),
-            const SizedBox(height: 8),
-            Text(
+          // Profil fotoğrafı (yuvarlak)
+          Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: borderColor,
+                    width: 4,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: borderColor.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: avatarSize / 2,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: user['avatar_url'] != null
+                      ? NetworkImage(user['avatar_url'])
+                      : null,
+                  child: user['avatar_url'] == null
+                      ? Icon(
+                          Icons.person,
+                          size: avatarSize / 2,
+                          color: Colors.grey[400],
+                        )
+                      : null,
+                ),
+              ),
+              // Sıralama numarası (yuvarlağın altında)
+              Positioned(
+                bottom: -12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: borderColor,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '$rank',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // İsim
+          SizedBox(
+            width: 100,
+            child: Text(
               user['username'] ?? 'Kullanıcı',
-              style: const TextStyle(
+              textAlign: TextAlign.center,
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontSize: isFirst ? 15 : 14,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
-            Text(
-              '${user['total_points']} puan',
-              style: TextStyle(
-                color: colors[rank],
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+          ),
+          const SizedBox(height: 4),
+          // Puan
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.star,
+                size: 14,
+                color: borderColor,
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 4),
+              Text(
+                '${user['total_points']} pts',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLeaderboardItem(Map<String, dynamic> user, int rank) {
+    final myId = _supabase.auth.currentUser?.id;
+    final isMe = user['id'] == myId;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: deepGreen.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: isMe ? midGreen.withOpacity(0.15) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: isMe
+            ? Border.all(color: deepGreen, width: 2)
+            : null,
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              alignment: Alignment.center,
+            SizedBox(
+              width: 32,
               child: Text(
-                '#$rank',
+                '$rank',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: deepGreen,
+                  color: isMe ? deepGreen : Colors.grey[700],
                 ),
+                textAlign: TextAlign.center,
               ),
             ),
+            const SizedBox(width: 8),
             CircleAvatar(
-              radius: 24,
+              radius: 22,
               backgroundColor: deepGreen.withOpacity(0.1),
               backgroundImage: user['avatar_url'] != null
                   ? NetworkImage(user['avatar_url'])
                   : null,
               child: user['avatar_url'] == null
-                  ? Icon(Icons.person, color: deepGreen, size: 24)
+                  ? Icon(Icons.person, color: deepGreen, size: 22)
                   : null,
             ),
           ],
         ),
-        title: Text(
-          user['username'] ?? 'Kullanıcı',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: user['full_name'] != null
-            ? Text(
-                user['full_name'],
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
-              )
-            : null,
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
+        title: Row(
           children: [
-            Text(
-              '${user['total_points']}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: deepGreen,
+            Expanded(
+              child: Text(
+                user['username'] ?? 'Kullanıcı',
+                style: TextStyle(
+                  fontWeight: isMe ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(
-              'puan',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
+            if (isMe)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: deepGreen,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Sen',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
           ],
+        ),
+        trailing: Text(
+          '${user['total_points']} pts',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: isMe ? deepGreen : Colors.grey[700],
+          ),
         ),
         onTap: () => Navigator.push(
           context,

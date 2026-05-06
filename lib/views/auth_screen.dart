@@ -118,7 +118,7 @@ class _AuthScreenState extends State<AuthScreen> {
     // Renk paleti
     const Color deepGreen = Color(0xFF346739);
     const Color midGreen = Color(0xFF79AE6F);
-    const Color vanilla = Color(0xFFF2EDC2);
+    const Color vanilla = Color(0xFFFAF8F3);
     
     return AppScaffold(
       backgroundColor: Colors.white,

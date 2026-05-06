@@ -26,7 +26,7 @@ class _ReportMissingCafeScreenState extends State<ReportMissingCafeScreen> {
   final Color deepGreen = const Color(0xFF346739);
   final Color midGreen = const Color(0xFF79AE6F);
   final Color lightGreen = const Color(0xFF9FCB98);
-  final Color vanilla = const Color(0xFFF2EDC2);
+  final Color vanilla = const Color(0xFFFAF8F3);
 
   @override
   void initState() {

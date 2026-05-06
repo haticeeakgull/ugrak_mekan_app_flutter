@@ -301,7 +301,7 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFFF2EDC2),
+                backgroundColor: const Color(0xFFFAF8F3),
                 child: Text(
                   user.isNotEmpty ? user[0].toUpperCase() : "?",
                   style: const TextStyle(color: Color(0xFF346739)),
