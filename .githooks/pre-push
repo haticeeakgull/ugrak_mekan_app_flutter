@@ -1,0 +1,26 @@
+#!/bin/bash
+# Pre-push hook to run Flutter tests and analysis before push
+
+echo "🧪 Running Flutter tests and analysis before push..."
+
+# Run Flutter analyze
+echo "📊 Running Flutter analyze..."
+flutter analyze
+
+if [ $? -ne 0 ]; then
+    echo "⚠️  Analysis found issues, but continuing..."
+fi
+
+# Run tests with coverage
+echo "🧪 Running tests with coverage..."
+flutter test --coverage --no-pub
+
+# Check if tests passed
+if [ $? -ne 0 ]; then
+    echo "❌ Tests failed! Push aborted."
+    echo "💡 Fix the failing tests or use 'git push --no-verify' to skip this check."
+    exit 1
+fi
+
+echo "✅ All tests passed! Proceeding with push..."
+exit 0
