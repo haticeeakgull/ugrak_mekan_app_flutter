@@ -149,18 +149,21 @@ chore: build/config değişiklikleri
 
 **Pipeline Adımları**:
 1. **Test Job**
+   - Mock `.env` dosyası oluşturma
    - Flutter stable (latest) kurulumu
    - Dependencies yükleme
-   - Code analysis (`flutter analyze`)
+   - Code analysis (`flutter analyze --no-fatal-infos`)
    - 206 test çalıştırma
    - Coverage raporu oluşturma
    - Artifacts saklama (v4)
 
 2. **Build Android Job** (test başarılıysa)
+   - Mock `.env` dosyası oluşturma
    - Release APK build
    - APK artifact olarak saklama (v4)
 
 3. **Build iOS Job** (sadece main branch)
+   - Mock `.env` dosyası oluşturma
    - iOS build (codesign olmadan)
 
 **Action Versions** (Güncel):
@@ -170,6 +173,8 @@ chore: build/config değişiklikleri
 - `actions/setup-java@v4`
 - `codecov/codecov-action@v4`
 - `subosito/flutter-action@v2`
+
+**Not**: CI/CD'de `.env` dosyası mock değerlerle oluşturulur. Production değerleri GitHub Secrets'ta saklanmalıdır.
 
 ### Git Hooks Kurulumu
 

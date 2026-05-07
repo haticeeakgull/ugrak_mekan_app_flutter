@@ -16,6 +16,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Create .env file for CI
+        run: |
+          echo "SBERT_API_URL=https://mock-api.example.com" > .env
+          echo "SUPABASE_URL=https://mock.supabase.co" >> .env
+          echo "SUPABASE_ANON_KEY=mock-key" >> .env
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -29,7 +35,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Analyze code
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
         continue-on-error: true
 
       - name: Run tests
@@ -91,6 +97,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Create .env file for CI
+        run: |
+          echo "SBERT_API_URL=https://mock-api.example.com" > .env
+          echo "SUPABASE_URL=https://mock.supabase.co" >> .env
+          echo "SUPABASE_ANON_KEY=mock-key" >> .env
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -125,6 +137,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Create .env file for CI
+        run: |
+          echo "SBERT_API_URL=https://mock-api.example.com" > .env
+          echo "SUPABASE_URL=https://mock.supabase.co" >> .env
+          echo "SUPABASE_ANON_KEY=mock-key" >> .env
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
