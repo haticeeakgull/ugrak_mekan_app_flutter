@@ -154,14 +154,22 @@ chore: build/config değişiklikleri
    - Code analysis (`flutter analyze`)
    - 206 test çalıştırma
    - Coverage raporu oluşturma
-   - Artifacts saklama
+   - Artifacts saklama (v4)
 
 2. **Build Android Job** (test başarılıysa)
    - Release APK build
-   - APK artifact olarak saklama
+   - APK artifact olarak saklama (v4)
 
 3. **Build iOS Job** (sadece main branch)
    - iOS build (codesign olmadan)
+
+**Action Versions** (Güncel):
+- `actions/checkout@v4`
+- `actions/upload-artifact@v4`
+- `actions/github-script@v7`
+- `actions/setup-java@v4`
+- `codecov/codecov-action@v4`
+- `subosito/flutter-action@v2`
 
 ### Git Hooks Kurulumu
 
