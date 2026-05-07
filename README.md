@@ -108,8 +108,8 @@ ugrak_mekan_app/
 
 ## 🔧 Teknolojiler
 
-- **Flutter** 3.32.1
-- **Dart** 3.x
+- **Flutter** Stable (Latest)
+- **Dart** >=3.5.0 <4.0.0
 - **Supabase** - Backend
 - **Google Maps** - Harita entegrasyonu
 - **GitHub Actions** - CI/CD
@@ -149,7 +149,7 @@ chore: build/config değişiklikleri
 
 **Pipeline Adımları**:
 1. **Test Job**
-   - Flutter 3.32.1 kurulumu
+   - Flutter stable (latest) kurulumu
    - Dependencies yükleme
    - Code analysis (`flutter analyze`)
    - 206 test çalıştırma
