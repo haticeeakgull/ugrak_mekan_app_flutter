@@ -211,14 +211,68 @@ class CollectionService {
     String colId,
     String colName,
   ) async {
+    // colId'nin geçerli olduğundan emin ol
+    if (colId.isEmpty) {
+      throw 'Koleksiyon ID boş olamaz';
+    }
+    
+    final myId = _supabase.auth.currentUser!.id;
+    
+    debugPrint('📤 Koleksiyon gönderiliyor:');
+    debugPrint('   Sender: $myId');
+    debugPrint('   Target User: $targetUserId');
+    debugPrint('   Collection ID: $colId');
+    debugPrint('   Collection Name: $colName');
+    
+    // 1. İki kullanıcı arasında chat var mı kontrol et
+    final chatResponse = await _supabase
+        .from('chats')
+        .select()
+        .or(
+          'and(user_one_id.eq.$myId,user_two_id.eq.$targetUserId),and(user_one_id.eq.$targetUserId,user_two_id.eq.$myId)',
+        )
+        .maybeSingle();
+
+    String chatId;
+    
+    if (chatResponse == null) {
+      // Chat yoksa yeni oluştur
+      debugPrint('   💬 Yeni chat oluşturuluyor...');
+      final newChat = await _supabase
+          .from('chats')
+          .insert({
+            'user_one_id': myId,
+            'user_two_id': targetUserId,
+            'last_message': '📍 Bir koleksiyon paylaştı',
+            'last_message_time': DateTime.now().toIso8601String(),
+          })
+          .select()
+          .single();
+      chatId = newChat['id'];
+      debugPrint('   ✅ Yeni chat oluşturuldu: $chatId');
+    } else {
+      chatId = chatResponse['id'];
+      debugPrint('   ✅ Mevcut chat bulundu: $chatId');
+      
+      // Mevcut chat'in son mesaj bilgisini güncelle
+      await _supabase
+          .from('chats')
+          .update({
+            'last_message': '📍 Bir koleksiyon paylaştı',
+            'last_message_time': DateTime.now().toIso8601String(),
+          })
+          .eq('id', chatId);
+    }
+    
+    // 2. Mesajı gönder
     await _supabase.from('messages').insert({
-      'sender_id': _supabase.auth.currentUser!.id,
-      'receiver_id': targetUserId,
-      'content':
-          'Sana bir koleksiyon gönderdi: $colName\nhttps://haticeeakgull.github.io/?koleksiyonId=$colId',
-      'is_collection': true,
+      'chat_id': chatId,
+      'sender_id': myId,
+      'content': 'Sana bir koleksiyon gönderdi: $colName\nhttps://haticeeakgull.github.io/?koleksiyonId=$colId',
       'collection_id': colId,
     });
+    
+    debugPrint('✅ Koleksiyon başarıyla gönderildi');
   }
 
   // Kapak fotoğrafını güncelle

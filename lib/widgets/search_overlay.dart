@@ -612,18 +612,18 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.white.withOpacity(0.9),
-              vanilla.withOpacity(0.7),
+              deepGreen.withOpacity(0.85),
+              midGreen.withOpacity(0.75),
             ],
           ),
           boxShadow: [
             BoxShadow(
-              color: deepGreen.withOpacity(0.15),
+              color: deepGreen.withOpacity(0.3),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
             BoxShadow(
-              color: Colors.white.withOpacity(0.8),
+              color: midGreen.withOpacity(0.2),
               blurRadius: 10,
               offset: const Offset(-4, -4),
             ),
@@ -640,12 +640,12 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.white.withOpacity(0.7),
-                    vanilla.withOpacity(0.5),
+                    deepGreen.withOpacity(0.9),
+                    midGreen.withOpacity(0.8),
                   ],
                 ),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withOpacity(0.3),
                   width: 1.5,
                 ),
               ),
@@ -661,12 +661,12 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: deepGreen.withOpacity(0.1),
+                                color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.coffee_rounded,
-                                color: deepGreen,
+                                color: Colors.white,
                                 size: 20,
                               ),
                             ),
@@ -675,12 +675,12 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  const Text(
                                     'Uğrak Mekan',
                                     style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.w900,
-                                      color: deepGreen,
+                                      color: Colors.white,
                                       letterSpacing: -0.5,
                                       height: 1.1,
                                     ),
@@ -690,7 +690,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                                     'Bugün nereye gidiyoruz? ☕',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: midGreen,
+                                      color: Colors.white.withOpacity(0.9),
                                       fontWeight: FontWeight.w600,
                                       letterSpacing: 0.2,
                                     ),
@@ -706,14 +706,14 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                   if (widget.onLogout != null)
                     Container(
                       decoration: BoxDecoration(
-                        color: deepGreen.withOpacity(0.08),
+                        color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
                         onPressed: widget.onLogout,
-                        icon: Icon(
+                        icon: const Icon(
                           Icons.logout_rounded,
-                          color: deepGreen,
+                          color: Colors.white,
                           size: 20,
                         ),
                         padding: const EdgeInsets.all(8),

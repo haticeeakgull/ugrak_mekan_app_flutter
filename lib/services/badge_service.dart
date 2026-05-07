@@ -377,7 +377,8 @@ class BadgeService {
         'current_progress': current,
         'required_progress': required,
         'last_updated': DateTime.now().toIso8601String(),
-      });
+      }, onConflict: 'user_id,badge_id');
+      
     } catch (e) {
       debugPrint('❌ İlerleme güncelleme hatası: $e');
     }

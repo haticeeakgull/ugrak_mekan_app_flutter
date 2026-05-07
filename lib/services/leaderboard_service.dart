@@ -1,52 +1,72 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Leaderboard Servisi - Puan ve sıralama yönetimi
+/// Leaderboard Servisi - Haftalık puan ve sıralama yönetimi
 class LeaderboardService {
   final _supabase = Supabase.instance.client;
 
-  /// Top kullanıcıları getir
-  Future<List<Map<String, dynamic>>> getLeaderboard({int limit = 100}) async {
+  /// Haftalık leaderboard'u getir (Bu haftanın liderleri)
+  Future<List<Map<String, dynamic>>> getWeeklyLeaderboard({int limit = 100}) async {
     try {
       final response = await _supabase
           .from('profiles')
-          .select('id, username, avatar_url, full_name, total_points')
-          .gt('total_points', 0)
-          .order('total_points', ascending: false)
+          .select('id, username, avatar_url, full_name, weekly_points')
+          .gt('weekly_points', 0)
+          .order('weekly_points', ascending: false)
           .limit(limit);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      debugPrint('❌ Leaderboard getirme hatası: $e');
+      debugPrint('❌ Haftalık leaderboard getirme hatası: $e');
       return [];
     }
   }
 
-  /// Kullanıcının sırasını getir
+  /// Geçmiş hafta kazananlarını getir
+  Future<List<Map<String, dynamic>>> getPastWinners({int limit = 10}) async {
+    try {
+      final response = await _supabase
+          .from('weekly_leaderboard_winners')
+          .select('*')
+          .order('week_start_date', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('❌ Geçmiş kazananlar getirme hatası: $e');
+      return [];
+    }
+  }
+
+  /// Kullanıcının haftalık sırasını getir
   Future<int> getUserRank(String userId) async {
     try {
-      final result = await _supabase
-          .rpc('get_user_rank', params: {'p_user_id': userId});
-
-      return result as int? ?? 0;
+      // Haftalık puanlara göre sıralama
+      final allUsers = await getWeeklyLeaderboard(limit: 1000);
+      final userIndex = allUsers.indexWhere((user) => user['id'] == userId);
+      
+      if (userIndex == -1) return 0;
+      return userIndex + 1;
     } catch (e) {
       debugPrint('❌ Sıra getirme hatası: $e');
       return 0;
     }
   }
 
-  /// Kullanıcının puan detaylarını getir
-  Future<Map<String, int>> getUserPointBreakdown(String userId) async {
+  /// Kullanıcının haftalık puan detaylarını getir
+  Future<Map<String, int>> getUserWeeklyBreakdown(String userId) async {
     try {
+      // Haftalık puan dökümü için RPC fonksiyonu çağır
+      // Not: Bu fonksiyonu SQL'de oluşturmanız gerekiyor
       final result = await _supabase
-          .rpc('get_user_point_breakdown', params: {'p_user_id': userId});
+          .rpc('get_user_weekly_breakdown', params: {'p_user_id': userId});
 
       if (result == null || result.isEmpty) {
         return {
           'post_points': 0,
           'comment_points': 0,
           'like_points': 0,
-          'follow_points': 0,
+          'follower_points': 0,
           'badge_points': 0,
           'total_points': 0,
         };
@@ -57,69 +77,52 @@ class LeaderboardService {
         'post_points': data['post_points'] ?? 0,
         'comment_points': data['comment_points'] ?? 0,
         'like_points': data['like_points'] ?? 0,
-        'follow_points': data['follow_points'] ?? 0,
+        'follower_points': data['follower_points'] ?? 0,
         'badge_points': data['badge_points'] ?? 0,
         'total_points': data['total_points'] ?? 0,
       };
     } catch (e) {
-      debugPrint('❌ Puan detayı getirme hatası: $e');
+      debugPrint('❌ Haftalık puan detayı getirme hatası: $e');
       return {
         'post_points': 0,
         'comment_points': 0,
         'like_points': 0,
-        'follow_points': 0,
+        'follower_points': 0,
         'badge_points': 0,
         'total_points': 0,
       };
     }
   }
 
-  /// Günlük snapshot'ı getir
-  Future<List<Map<String, dynamic>>> getDailySnapshot({
-    DateTime? date,
-    int limit = 100,
-  }) async {
-    try {
-      final targetDate = date ?? DateTime.now();
-      final dateStr =
-          '${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')}';
-
-      final response = await _supabase
-          .from('leaderboard_snapshots')
-          .select('''
-            rank,
-            points,
-            profiles!user_id (id, username, avatar_url, full_name)
-          ''')
-          .eq('snapshot_date', dateStr)
-          .order('rank', ascending: true)
-          .limit(limit);
-
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      debugPrint('❌ Snapshot getirme hatası: $e');
-      return [];
-    }
+  /// Bu haftanın başlangıç ve bitiş tarihlerini getir
+  Map<String, DateTime> getCurrentWeekDates() {
+    final now = DateTime.now();
+    final weekday = now.weekday; // 1 = Pazartesi, 7 = Pazar
+    
+    // Pazartesi 00:00
+    final weekStart = now.subtract(Duration(
+      days: weekday - 1,
+      hours: now.hour,
+      minutes: now.minute,
+      seconds: now.second,
+      milliseconds: now.millisecond,
+      microseconds: now.microsecond,
+    ));
+    
+    // Pazar 23:59
+    final weekEnd = weekStart.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    
+    return {
+      'start': weekStart,
+      'end': weekEnd,
+    };
   }
 
-  /// Kullanıcının geçmiş sıralamalarını getir
-  Future<List<Map<String, dynamic>>> getUserRankHistory(
-    String userId, {
-    int days = 30,
-  }) async {
-    try {
-      final response = await _supabase
-          .from('leaderboard_snapshots')
-          .select('rank, points, snapshot_date')
-          .eq('user_id', userId)
-          .order('snapshot_date', ascending: false)
-          .limit(days);
-
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      debugPrint('❌ Sıralama geçmişi getirme hatası: $e');
-      return [];
-    }
+  /// Haftanın kalan gün sayısını getir
+  int getDaysUntilReset() {
+    final now = DateTime.now();
+    final weekday = now.weekday; // 1 = Pazartesi, 7 = Pazar
+    return 7 - weekday + 1; // Pazara kadar kalan gün
   }
 
   /// Kullanıcının çevresindeki sıralamayı getir (±5)
@@ -135,7 +138,7 @@ class LeaderboardService {
       final startRank = (rank - 5).clamp(1, double.infinity).toInt();
       final endRank = rank + 5;
 
-      final allUsers = await getLeaderboard(limit: 1000);
+      final allUsers = await getWeeklyLeaderboard(limit: 1000);
       return allUsers
           .where((user) {
             final index = allUsers.indexOf(user) + 1;
@@ -168,10 +171,28 @@ class LeaderboardService {
     }
   }
 
-  /// Bir sonraki güncelleme zamanını hesapla
+  /// Bir sonraki güncelleme zamanını hesapla (Her gün 03:00)
   DateTime getNextUpdateTime() {
     final now = DateTime.now();
     final tomorrow = DateTime(now.year, now.month, now.day + 1, 3, 0);
     return tomorrow;
+  }
+
+  /// Bir sonraki haftalık sıfırlama zamanını hesapla (Pazar 23:59)
+  DateTime getNextResetTime() {
+    final now = DateTime.now();
+    final weekday = now.weekday; // 1 = Pazartesi, 7 = Pazar
+    final daysUntilSunday = 7 - weekday;
+    
+    final nextSunday = DateTime(
+      now.year,
+      now.month,
+      now.day + daysUntilSunday,
+      23,
+      59,
+      59,
+    );
+    
+    return nextSunday;
   }
 }

@@ -1,0 +1,80 @@
+name: Weekly Leaderboard System
+
+on:
+  schedule:
+    # Her gün saat 03:00'te haftalık puanları güncelle (UTC)
+    - cron: "0 3 * * *"
+    # Her Pazar 23:59'da kazananı kaydet ve sıfırla (UTC - Türkiye saati +3)
+    - cron: "59 20 * * 0"
+  workflow_dispatch:
+    # Manuel tetikleme için
+    inputs:
+      action:
+        description: "Action to perform"
+        required: true
+        default: "update"
+        type: choice
+        options:
+          - update
+          - reset
+
+jobs:
+  update-weekly-points:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 3 * * *' || (github.event_name ==
+      'workflow_dispatch' && github.event.inputs.action == 'update')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install supabase python-dotenv
+
+      - name: Update weekly points
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python update_weekly_leaderboard.py --action update
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Weekly points update failed!"
+
+  save-winner-and-reset:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '59 20 * * 0' || (github.event_name ==
+      'workflow_dispatch' && github.event.inputs.action == 'reset')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install supabase python-dotenv
+
+      - name: Save winner and reset points
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python update_weekly_leaderboard.py --action reset
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Weekly winner save and reset failed!"

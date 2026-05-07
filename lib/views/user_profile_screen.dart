@@ -238,10 +238,58 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   void _onShareCollection(Map<String, dynamic> col) {
+    // Kafe fotoğraflarını hazırla
+    final dynamic cafePhotosRaw = col['cafe_photos'];
+    List<String> cafePhotos = [];
+    if (cafePhotosRaw != null && cafePhotosRaw is List) {
+      cafePhotos = cafePhotosRaw.map((e) => e.toString()).toList();
+    }
+    
+    // Kafe sayısını koleksiyon_ogeleri'nden hesapla
+    int cafeCount = 0;
+    final dynamic items = col['koleksiyon_ogeleri'];
+    if (items != null && items is List) {
+      cafeCount = items.length;
+    }
+    
+    // Koleksiyon bilgilerini al
+    final String? coverImage = col['cover_image_url'];
+    final bool isPublic = col['is_public'] ?? true;
+    
+    // Kullanıcı bilgilerini al
+    final currentUser = _supabase.auth.currentUser;
+    final String username = _profileData?['username'] ?? 'Kullanıcı';
+    final String? avatarUrl = _profileData?['avatar_url'];
+    
+    // Collection ID'yi string'e çevir ve kontrol et
+    final String collectionId = col['id']?.toString() ?? '';
+    
+    debugPrint('📤 Paylaşım bilgileri:');
+    debugPrint('   Koleksiyon ID: $collectionId (type: ${collectionId.runtimeType})');
+    debugPrint('   Koleksiyon: ${col['isim']}');
+    debugPrint('   Kafe sayısı: $cafeCount');
+    debugPrint('   Fotoğraf sayısı: ${cafePhotos.length}');
+    
+    if (collectionId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Koleksiyon ID bulunamadı'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
     showAdvancedShareSheet(
       context,
-      col['id'].toString(),
+      collectionId,
       col['isim'] ?? "Koleksiyon",
+      coverImageUrl: coverImage,
+      cafePhotos: cafePhotos,
+      ownerUsername: username,
+      ownerAvatarUrl: avatarUrl,
+      cafeCount: cafeCount,
+      isPublic: isPublic,
     );
   }
 
