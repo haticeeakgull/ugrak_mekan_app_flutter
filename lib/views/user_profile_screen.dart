@@ -155,7 +155,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _userPosts = results[1] as List<dynamic>;
           _userCollections = results[2] as List<dynamic>;
           _userRank = results[3] as int;
-          _userPoints = _profileData?['total_points'] ?? 0;
+          _userPoints = _profileData?['weekly_points'] ?? 0; // Haftalık puanları göster
           _isLoading = false;
         });
       }
@@ -758,9 +758,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ),
                               ),
                               // Sıralama & Puanlar kartı (başlığın hemen altında)
-                              if (_userPoints > 0) ...[
-                                const SizedBox(height: 12),
-                                GestureDetector(
+                              // Her zaman göster (puanı 0 olsa bile)
+                              const SizedBox(height: 12),
+                              GestureDetector(
                                   onTap: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -815,7 +815,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
-                                                  '#$_userRank • $_userPoints puan',
+                                                  _userRank > 0 
+                                                      ? '#$_userRank • $_userPoints puan'
+                                                      : '$_userPoints puan',
                                                   style: const TextStyle(
                                                     color: Colors.white70,
                                                     fontSize: 11,
@@ -834,7 +836,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     ),
                                   ),
                                 ),
-                              ],
                               // Badge'ler (sıralama kartından sonra)
                               const SizedBox(height: 12),
                               _buildBadgeList(userId),
@@ -1382,15 +1383,36 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     CircleAvatar(
                       radius: 26,
                       backgroundColor: const Color(0xFFFAF8F3),
-                      backgroundImage:
-                          iconUrl.isNotEmpty ? NetworkImage(iconUrl) : null,
-                      child: iconUrl.isEmpty
-                          ? const Icon(
+                      child: iconUrl.isNotEmpty
+                          ? ClipOval(
+                              child: Image.network(
+                                iconUrl,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.workspace_premium,
+                                    color: Color(0xFF79AE6F),
+                                    size: 24,
+                                  );
+                                },
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF79AE6F),
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                          : const Icon(
                               Icons.workspace_premium,
                               color: Color(0xFF79AE6F),
                               size: 24,
-                            )
-                          : null,
+                            ),
                     ),
                     const SizedBox(height: 6),
                     Text(

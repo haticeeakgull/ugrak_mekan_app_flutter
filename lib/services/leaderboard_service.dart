@@ -43,9 +43,28 @@ class LeaderboardService {
     try {
       // Haftalık puanlara göre sıralama
       final allUsers = await getWeeklyLeaderboard(limit: 1000);
+      
+      // Kullanıcıyı bul
       final userIndex = allUsers.indexWhere((user) => user['id'] == userId);
       
-      if (userIndex == -1) return 0;
+      // Bulunamadıysa veya puanı 0 ise
+      if (userIndex == -1) {
+        // Kullanıcının puanını kontrol et
+        final userProfile = await _supabase
+            .from('profiles')
+            .select('weekly_points')
+            .eq('id', userId)
+            .maybeSingle();
+        
+        // Puanı 0 ise sıralama yok
+        if (userProfile == null || userProfile['weekly_points'] == 0) {
+          return 0;
+        }
+        
+        // Puanı var ama listede yok (limit dışında)
+        return 999; // Sıralama dışı
+      }
+      
       return userIndex + 1;
     } catch (e) {
       debugPrint('❌ Sıra getirme hatası: $e');

@@ -95,16 +95,36 @@ Widget buildBadgeSection(String userId) {
                           CircleAvatar(
                             radius: 26,
                             backgroundColor: const Color(0xFFFAF8F3),
-                            backgroundImage: iconUrl.isNotEmpty
-                                ? NetworkImage(iconUrl)
-                                : null,
-                            child: iconUrl.isEmpty
-                                ? const Icon(
+                            child: iconUrl.isNotEmpty
+                                ? ClipOval(
+                                    child: Image.network(
+                                      iconUrl,
+                                      width: 52,
+                                      height: 52,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Icon(
+                                          Icons.workspace_premium,
+                                          color: Color(0xFF79AE6F),
+                                          size: 24,
+                                        );
+                                      },
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return const Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF79AE6F),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : const Icon(
                                     Icons.workspace_premium,
                                     color: Color(0xFF79AE6F),
                                     size: 24,
-                                  )
-                                : null,
+                                  ),
                           ),
                           const SizedBox(height: 6),
                           Text(

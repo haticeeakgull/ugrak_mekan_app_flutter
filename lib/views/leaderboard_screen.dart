@@ -47,9 +47,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
     try {
       final results = await Future.wait([
-        _leaderboardService.getLeaderboard(limit: 100),
+        _leaderboardService.getWeeklyLeaderboard(limit: 100),
         _leaderboardService.getUserRank(myId),
-        _leaderboardService.getUserPointBreakdown(myId),
+        _leaderboardService.getUserWeeklyBreakdown(myId),
       ]);
 
       if (mounted) {
@@ -109,31 +109,76 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       );
     }
 
+    if (_leaderboard.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.emoji_events_outlined,
+              size: 80,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Henüz kimse puan kazanmamış',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'İlk sen ol! Post paylaş, yorum yap.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       color: deepGreen,
       onRefresh: _loadData,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Kullanıcının kendi sırası
-          _buildMyRankCard(),
+          // Kullanıcının kendi sırası (sadece sıralama varsa)
+          if (_myRank > 0) _buildMyRankCard(),
 
-          // Top 3 podium
+          // Top 3 podium (en az 3 kullanıcı varsa)
           if (_leaderboard.length >= 3) _buildTopThreePodium(),
 
-          const SizedBox(height: 16),
+          // 3'ten az kullanıcı varsa onları liste olarak göster
+          if (_leaderboard.length < 3) ...[
+            const SizedBox(height: 16),
+            ...List.generate(
+              _leaderboard.length,
+              (index) => _buildLeaderboardItem(
+                _leaderboard[index],
+                index + 1,
+              ),
+            ),
+          ],
 
-          // Geri kalan liste (4'ten başlayarak)
-          ...List.generate(
-            _leaderboard.length - 3,
-            (index) {
-              final actualIndex = index + 3;
-              return _buildLeaderboardItem(
-                _leaderboard[actualIndex],
-                actualIndex + 1,
-              );
-            },
-          ),
+          // 3 veya daha fazla kullanıcı varsa, 4'ten başlayarak göster
+          if (_leaderboard.length >= 3) ...[
+            const SizedBox(height: 16),
+            ...List.generate(
+              _leaderboard.length - 3,
+              (index) {
+                final actualIndex = index + 3;
+                return _buildLeaderboardItem(
+                  _leaderboard[actualIndex],
+                  actualIndex + 1,
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -145,6 +190,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       (user) => user['id'] == myId,
       orElse: () => {},
     );
+
+    final myPoints = myData['weekly_points'] ?? 0;
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -171,7 +218,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '#$_myRank',
+              _myRank > 0 ? '#$_myRank' : '-',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -184,16 +231,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Senin Sıran',
-                  style: TextStyle(
+                Text(
+                  _myRank > 0 ? 'Senin Sıran' : 'Henüz Sıralama Yok',
+                  style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${myData['total_points'] ?? 0} puan',
+                  '$myPoints puan',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -351,7 +398,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               ),
               const SizedBox(width: 4),
               Text(
-                '${user['total_points']} pts',
+                '${user['weekly_points'] ?? 0} pts',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 13,
@@ -441,7 +488,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           ],
         ),
         trailing: Text(
-          '${user['total_points']} pts',
+          '${user['weekly_points'] ?? 0} pts',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 15,
@@ -466,6 +513,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     }
 
     final breakdown = _myPointBreakdown;
+    
+    // Null-safe değer alma
+    final totalPoints = breakdown['total_points'] ?? 0;
+    final postPoints = breakdown['post_points'] ?? 0;
+    final commentPoints = breakdown['comment_points'] ?? 0;
+    final likePoints = breakdown['like_points'] ?? 0;
+    final followPoints = breakdown['follow_points'] ?? 0;
+    final badgePoints = breakdown['badge_points'] ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -492,7 +547,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${breakdown['total_points']}',
+                  '$totalPoints',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 48,
@@ -501,7 +556,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '#$_myRank sıradasın',
+                  _myRank > 0 ? '#$_myRank sıradasın' : 'Henüz sıralama yok',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -527,31 +582,31 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           // Puan detayları
           _buildPointCard(
             '📸 Paylaşımlar',
-            breakdown['post_points']!,
+            postPoints,
             '15 puan/paylaşım',
             Icons.photo_camera,
           ),
           _buildPointCard(
             '💬 Yorumlar',
-            breakdown['comment_points']!,
+            commentPoints,
             '10 puan/yorum',
             Icons.comment,
           ),
           _buildPointCard(
             '❤️ Beğeniler',
-            breakdown['like_points']!,
+            likePoints,
             '5 puan/beğeni',
             Icons.favorite,
           ),
           _buildPointCard(
             '👥 Takipçiler',
-            breakdown['follow_points']!,
+            followPoints,
             '5 puan/takipçi',
             Icons.people,
           ),
           _buildPointCard(
             '🏆 Rozetler',
-            breakdown['badge_points']!,
+            badgePoints,
             'Rozet puanları',
             Icons.emoji_events,
           ),
