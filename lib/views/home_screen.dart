@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
           searchQuery.isEmpty ? 'kafe' : searchQuery,
           il: il,
           semt: ilceler.isNotEmpty ? ilceler.first : null,
-          vibe: vibeler.isNotEmpty ? vibeler.first : null,
+          vibes: vibeler, // Artık liste olarak gönderiyoruz
           userLat: userLat,
           userLng: userLng,
         );
@@ -155,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
           dogalDil,
           il: il,
           semt: ilceler.isNotEmpty ? ilceler.first : null,
-          vibe: vibeler.isNotEmpty ? vibeler.first : null,
+          vibes: vibeler, // Artık liste olarak gönderiyoruz
           userLat: userLat,
           userLng: userLng,
         );
@@ -167,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'kafe',
           il: il,
           semt: ilceler.isNotEmpty ? ilceler.first : null,
-          vibe: vibeler.isNotEmpty ? vibeler.first : null,
+          vibes: vibeler, // Artık liste olarak gönderiyoruz
           userLat: userLat,
           userLng: userLng,
         );

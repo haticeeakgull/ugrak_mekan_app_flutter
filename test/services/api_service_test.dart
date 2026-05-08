@@ -186,13 +186,25 @@ void main() {
 
     test('should apply vibe filter when provided', () {
       // Arrange
-      final vibe = 'Sakin';
+      final vibes = ['Sakin', 'Huzurlu'];
 
       // Act
-      final shouldApplyFilter = vibe != null && vibe.isNotEmpty;
+      final shouldApplyFilter = vibes != null && vibes.isNotEmpty;
 
       // Assert
       expect(shouldApplyFilter, true);
+    });
+
+    test('should handle multiple vibes', () {
+      // Arrange
+      final vibes = ['Sakin', 'Huzurlu', 'Doğal'];
+
+      // Act
+      final vibeCount = vibes.length;
+
+      // Assert
+      expect(vibeCount, 3);
+      expect(vibes.contains('Sakin'), true);
     });
   });
 
@@ -283,7 +295,7 @@ void main() {
       final query = 'test query';
       final il = 'İstanbul';
       final semt = 'Kadıköy';
-      final vibe = 'Sakin';
+      final vibes = ['Sakin', 'Huzurlu'];
       final userLat = 41.0;
       final userLng = 29.0;
 
@@ -295,7 +307,7 @@ void main() {
         'match_count': 20,
         'p_il_adi': il,
         'p_ilce_adi': semt,
-        'p_vibe_etiketi': vibe,
+        'p_vibe_etiketleri': vibes,
         'p_user_lat': userLat,
         'p_user_lng': userLng,
       };
@@ -306,6 +318,7 @@ void main() {
       expect(params['match_threshold'], 0.0);
       expect(params['match_count'], 20);
       expect(params['p_il_adi'], il);
+      expect(params['p_vibe_etiketleri'], isA<List<String>>());
     });
 
     test('should build RPC params without optional filters', () {
@@ -324,7 +337,7 @@ void main() {
       // Assert
       expect(params.containsKey('p_il_adi'), false);
       expect(params.containsKey('p_ilce_adi'), false);
-      expect(params.containsKey('p_vibe_etiketi'), false);
+      expect(params.containsKey('p_vibe_etiketleri'), false);
     });
   });
 

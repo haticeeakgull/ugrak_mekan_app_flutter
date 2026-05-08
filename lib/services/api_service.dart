@@ -16,12 +16,16 @@ class ApiService {
     String query, {
     String? il,
     String? semt,
-    String? vibe,
+    List<String>? vibes, // Artık liste olarak alıyoruz
     double? userLat,
     double? userLng,
   }) async {
     try {
       debugPrint('🔍 Normal arama başladı: "$query"');
+      debugPrint('  - il: $il');
+      debugPrint('  - semt: $semt');
+      debugPrint('  - vibes: $vibes');
+      debugPrint('  - userLat: $userLat, userLng: $userLng');
       
       var queryBuilder = _supabase
           .from('ilce_isimli_kafeler')
@@ -48,20 +52,49 @@ class ApiService {
         queryBuilder = queryBuilder.eq('ilce_adi', semt);
       }
 
-      if (vibe != null && vibe.isNotEmpty) {
-        queryBuilder = queryBuilder.contains('vibe_etiketleri', [vibe]);
-      }
-
-      // Limit ve execute
+      // JSONB vibe filtreleme - Supabase'in contains metodu ile sorun var
+      // Çözüm: Veri çektikten sonra client-side filtreleme yapacağız
+      
+      // Limit - Konum varsa daha fazla çek (mesafeye göre sıralayacağız)
+      final int limit = (userLat != null && userLng != null) ? 100 : 50;
+      
       final List<dynamic> data = await queryBuilder
-          .limit(50)
+          .limit(limit)
           .timeout(const Duration(seconds: 10));
 
-      debugPrint('✅ Normal arama sonuç sayısı: ${data.length}');
+      debugPrint('✅ Normal arama sonuç sayısı (filtreleme öncesi): ${data.length}');
+
+      // Client-side vibe filtreleme (eğer vibe seçildiyse)
+      List<dynamic> filteredData = data;
+      if (vibes != null && vibes.isNotEmpty) {
+        filteredData = data.where((item) {
+          final itemVibes = item['vibe_etiketleri'];
+          if (itemVibes == null) return false;
+          
+          // JSONB array'i Dart list'e çevir
+          List<String> cafeVibes = [];
+          if (itemVibes is List) {
+            cafeVibes = itemVibes.map((v) => v.toString()).toList();
+          } else if (itemVibes is String) {
+            // Eğer string ise parse et
+            try {
+              final parsed = jsonDecode(itemVibes);
+              if (parsed is List) {
+                cafeVibes = parsed.map((v) => v.toString()).toList();
+              }
+            } catch (_) {}
+          }
+          
+          // Seçilen tüm vibe'lar kafede var mı? (AND mantığı)
+          return vibes.every((vibe) => cafeVibes.contains(vibe));
+        }).toList();
+        
+        debugPrint('✅ Vibe filtreleme sonrası: ${filteredData.length} sonuç');
+      }
 
       // Konum varsa mesafeye göre sırala
       if (userLat != null && userLng != null) {
-        data.sort((a, b) {
+        filteredData.sort((a, b) {
           final distA = _calculateDistance(
             userLat,
             userLng,
@@ -76,9 +109,11 @@ class ApiService {
           );
           return distA.compareTo(distB);
         });
+        
+        debugPrint('✅ Mesafeye göre sıralandı (en yakın: ${filteredData.isNotEmpty ? filteredData.first['kafe_adi'] : 'yok'})');
       } else {
         // Konum yoksa kafe adına göre alfabetik sırala
-        data.sort((a, b) {
+        filteredData.sort((a, b) {
           final nameA = (a['kafe_adi'] ?? '').toString().toLowerCase();
           final nameB = (b['kafe_adi'] ?? '').toString().toLowerCase();
           return nameA.compareTo(nameB);
@@ -86,7 +121,7 @@ class ApiService {
       }
 
       // Kolon isimlerini düzelt (il_adi -> il, ilce_adi -> ilce)
-      final normalizedData = data.map((item) {
+      final normalizedData = filteredData.map((item) {
         final Map<String, dynamic> itemMap = Map<String, dynamic>.from(item);
         return {
           ...itemMap,
@@ -98,6 +133,9 @@ class ApiService {
       return normalizedData.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
       debugPrint("❌ Normal arama hatası: $e");
+      if (e.toString().contains('invalid input syntax for type json')) {
+        debugPrint("💡 Vibe etiketleri formatı hatalı. Array formatında gönderildiğinden emin ol.");
+      }
       rethrow;
     }
   }
@@ -125,7 +163,7 @@ class ApiService {
     String query, {
     String? il,
     String? semt,
-    String? vibe,
+    List<String>? vibes, // Artık liste olarak alıyoruz
     double? userLat,
     double? userLng,
   }) async {
@@ -177,8 +215,9 @@ class ApiService {
         params['p_ilce_adi'] = semt;
       }
 
-      if (vibe != null && vibe.isNotEmpty) {
-        params['p_vibe_etiketi'] = vibe;
+      if (vibes != null && vibes.isNotEmpty) {
+        // JSONB için array gönderiyoruz
+        params['p_vibe_etiketleri'] = vibes; // Supabase otomatik olarak JSONB'ye çevirecek
       }
 
       if (userLat != null && userLng != null) {
@@ -187,7 +226,14 @@ class ApiService {
       }
 
       // 🔥 RPC CALL - Dinamik AI fonksiyonu (3 tablo: kafe + yorumlar + postlar)
-      debugPrint('🔍 AI Arama params: $params');
+      debugPrint('🔍 AI Arama params:');
+      debugPrint('  - query: $query');
+      debugPrint('  - il: ${params['p_il_adi']}');
+      debugPrint('  - ilce: ${params['p_ilce_adi']}');
+      debugPrint('  - vibes: ${params['p_vibe_etiketleri']}');
+      debugPrint('  - userLat: ${params['p_user_lat']}');
+      debugPrint('  - userLng: ${params['p_user_lng']}');
+      
       final List<dynamic> data = await _supabase
           .rpc('kafe_ara_ai_dynamic', params: params)
           .timeout(const Duration(seconds: 30));
@@ -198,7 +244,9 @@ class ApiService {
         for (var item in data.take(3)) {
           final sim = (item['similarity'] as num?)?.toStringAsFixed(3) ?? '0';
           final source = item['match_source'] ?? 'unknown';
+          final reason = item['reason'] ?? 'Sebep belirtilmemiş';
           debugPrint('   - ${item['kafe_adi']} (sim: $sim, kaynak: $source)');
+          debugPrint('     Sebep: $reason');
         }
       }
 
@@ -219,6 +267,9 @@ class ApiService {
       return unique.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
       debugPrint("❌ AI Arama Hatası: $e");
+      if (e.toString().contains('does not exist') || e.toString().contains('operator')) {
+        debugPrint("💡 SQL fonksiyonu güncellenmiş mi? Supabase'de kafe_ara_ai_dynamic fonksiyonunu kontrol et.");
+      }
       // Timeout hatası olsa bile boş liste yerine rethrow — çağıran taraf handle eder
       rethrow;
     }

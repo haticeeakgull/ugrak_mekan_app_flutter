@@ -67,42 +67,28 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     final String? ilParam = _isNearby ? _nearbyCity : selectedCity;
     final String searchText = _searchController.text.trim();
     
-    // AI kullanılıyorsa searchText'i gönder, değilse boş string
-    // Home screen bu parametreyi kullanarak hangi arama metodunu çağıracağına karar verecek
     widget.onSearch(
       ilParam,
       selectedDistrict != null ? [selectedDistrict!] : [],
       selectedVibes,
-      useAI ? searchText : '', // AI ise text gönder, değilse boş
+      useAI ? searchText : 'DIRECT:$searchText',
       _isNearby ? _userLat : null,
       _isNearby ? _userLng : null,
     );
   }
   
-  void _triggerDirectSearch() {
-    // Direct search without AI - but we need to pass the search text differently
-    final String? ilParam = _isNearby ? _nearbyCity : selectedCity;
-    final String searchText = _searchController.text.trim();
+  void _applyFilters() {
+    // Filtreleri kaydet ve paneli kapat
+    setState(() => isPanelOpen = false);
+    widget.onPanelToggle?.call(false);
     
-    // Normal aramada searchText'i özel bir formatta gönderelim
-    // Örneğin "DIRECT:" prefix'i ile
-    widget.onSearch(
-      ilParam,
-      selectedDistrict != null ? [selectedDistrict!] : [],
-      selectedVibes,
-      'DIRECT:$searchText', // DIRECT prefix'i ile normal arama olduğunu belirt
-      _isNearby ? _userLat : null,
-      _isNearby ? _userLng : null,
-    );
-  }
-  
-  void _triggerAISearch() {
-    // AI-assisted search
-    if (_searchController.text.trim().isEmpty) {
-      _showSnack('Lütfen bir arama metni girin');
-      return;
+    // Eğer "Konumum" seçiliyse otomatik arama yap
+    if (_isNearby && _userLat != null && _userLng != null) {
+      _triggerNearbySearch();
+      _showSnack('Yakınındaki kafeler gösteriliyor...');
+    } else {
+      _showSnack('Filtreler uygulandı. Arama yapmak için search bar\'ı kullanın.');
     }
-    _triggerSearch(useAI: true);
   }
 
   Future<void> _onCitySelected(String city) async {
@@ -130,7 +116,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     } catch (_) {
       if (mounted) setState(() => _isLoadingIlceler = false);
     }
-    // _triggerSearch() kaldırıldı — sadece "Uygula"ya basınca arama yapılacak
+    // Arama yapma - sadece filtre seçimi
   }
 
   Future<void> _handleNearbySelected() async {
@@ -173,11 +159,25 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
         _isLoadingLocation = false;
       });
       
-      _triggerSearch();
+      // Otomatik olarak yakındaki kafeleri göster
+      _triggerNearbySearch();
     } catch (e) {
       _showSnack('Konum alınamadı.');
       setState(() => _isLoadingLocation = false);
     }
+  }
+
+  /// Konuma göre otomatik arama
+  void _triggerNearbySearch() {
+    final String searchText = _searchController.text.trim();
+    widget.onSearch(
+      _nearbyCity,
+      [],
+      selectedVibes,
+      searchText.isEmpty ? '' : 'DIRECT:$searchText',
+      _userLat,
+      _userLng,
+    );
   }
 
   /// Koordinata en yakın desteklenen şehri döner
@@ -454,7 +454,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                   _filteredIlceler = [];
                 }
               });
-              // seçim kaldırılınca arama yapma
+              // Arama yapma - sadece filtre kaldırma
             } else {
               _onCitySelected(c);
             }
@@ -502,7 +502,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
           ),
           onPressed: () {
             setState(() => selectedDistrict = isSel ? null : s);
-            // arama yapma, "Uygula"ya bırak
+            // Arama yapma - sadece filtre seçimi
           },
           backgroundColor: isSel ? midGreen : Colors.white.withOpacity(0.3),
           side: BorderSide(
@@ -535,7 +535,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
             setState(
               () => val ? selectedVibes.add(v) : selectedVibes.remove(v),
             );
-            // arama yapma, "Uygula"ya bırak
+            // Arama yapma - sadece filtre seçimi
           },
           selectedColor: midGreen,
           backgroundColor: Colors.white.withOpacity(0.2),
@@ -560,7 +560,6 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                 selectedCity = null;
                 selectedDistrict = null;
                 selectedVibes.clear();
-                _searchController.clear();
                 expandedIndex = null;
                 _isNearby = false;
                 _nearbyCity = null;
@@ -568,7 +567,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                 _userLng = null;
                 _filteredIlceler = [];
               });
-              // sıfırlayınca panel açık kalsın, arama yapma
+              _showSnack('Filtreler sıfırlandı');
             },
             child: Text(
               "Sıfırla",
@@ -579,11 +578,7 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
-              _triggerDirectSearch();
-              setState(() => isPanelOpen = false);
-              widget.onPanelToggle?.call(false);
-            },
+            onPressed: _applyFilters,
             style: ElevatedButton.styleFrom(
               backgroundColor: deepGreen,
               foregroundColor: Colors.white,
@@ -769,9 +764,9 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
               onSubmitted: (value) {
-                // Enter tuşuna basıldığında direkt arama
+                // Enter tuşuna basıldığında normal arama
                 if (value.trim().isNotEmpty) {
-                  _triggerDirectSearch();
+                  _triggerSearch(useAI: false);
                 }
               },
             ),
@@ -784,7 +779,14 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
-              onPressed: _triggerAISearch,
+              onPressed: () {
+                // AI arama
+                if (_searchController.text.trim().isEmpty) {
+                  _showSnack('Lütfen bir arama metni girin');
+                  return;
+                }
+                _triggerSearch(useAI: true);
+              },
               icon: Icon(
                 Icons.auto_awesome_rounded,
                 color: deepGreen,

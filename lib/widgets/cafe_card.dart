@@ -187,8 +187,42 @@ class _CafeCardState extends State<CafeCard> {
                       ],
                     ),
 
-                    // Alt: Uyum yüzdesi (varsa)
-                    if (avgMatch != null)
+                    // Alt: Reason (varsa) veya Uyum yüzdesi
+                    if (widget.cafe.reason != null && widget.cafe.reason!.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF346739).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.lightbulb_outline,
+                              size: 12,
+                              color: const Color(0xFF346739),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                widget.cafe.reason!,
+                                style: const TextStyle(
+                                  color: const Color(0xFF346739),
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (avgMatch != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,

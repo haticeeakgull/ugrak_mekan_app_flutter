@@ -10,6 +10,7 @@ class Cafe {
   final double latitude;
   final double longitude;
   final double similarity;
+  final String? reason; // Neden önerildiği açıklaması
   // String listesi yerine artık detaylı bir Map listesi tutuyoruz
   final List<Map<String, dynamic>> gorseller;
   final List<Map<String, dynamic>> yorumlar;
@@ -25,6 +26,7 @@ class Cafe {
     required this.latitude,
     required this.longitude,
     required this.similarity,
+    this.reason,
     required this.gorseller,
     required this.yorumlar,
     required this.postlar,
@@ -59,6 +61,7 @@ class Cafe {
       latitude: (json['latitude'] ?? 0.0).toDouble(),
       longitude: (json['longitude'] ?? 0.0).toDouble(),
       similarity: (json['similarity'] ?? 0.0).toDouble(),
+      reason: json['reason']?.toString(), // Neden önerildiği
       gorseller: gorselList, // Artık burası zengin bir liste
       yorumlar: List<Map<String, dynamic>>.from(json['yorumlar'] ?? []),
       postlar: List<Map<String, dynamic>>.from(
@@ -78,6 +81,7 @@ class Cafe {
       'latitude': latitude,
       'longitude': longitude,
       'similarity': similarity,
+      'reason': reason,
       'cafe_gorselleri': gorseller,
       'yorumlar': yorumlar,
       'postlar': postlar,

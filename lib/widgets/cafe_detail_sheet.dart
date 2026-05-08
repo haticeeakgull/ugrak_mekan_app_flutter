@@ -564,6 +564,40 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                         )
                                         .toList(),
                                   ),
+                                  // Reason bilgisi (varsa)
+                                  if (widget.cafe.reason != null && widget.cafe.reason!.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF346739).withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(0xFF346739).withOpacity(0.2),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.auto_awesome,
+                                            size: 18,
+                                            color: const Color(0xFF346739),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              widget.cafe.reason!,
+                                              style: const TextStyle(
+                                                color: const Color(0xFF346739),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 20),
                                   const Text(
                                     "Fotoğraflar",
