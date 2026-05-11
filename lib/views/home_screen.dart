@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _vibeler = [];
 
   final GlobalKey _searchKey = GlobalKey();
-  double _searchBarHeight = 166; // header (~110) + search bar (~56)
+  double _searchBarHeight = 190; // header + spacing + search bar + safe area
 
   // --- YENİ RENK PALETİ TANIMLARI ---
   final Color deepGreen = const Color(
@@ -227,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   : _results.isEmpty
                   ? _buildEmptyState()
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 80), // Üst padding artırıldı
                       physics: const BouncingScrollPhysics(),
                       itemCount: _results.length,
                       itemBuilder: (context, index) =>

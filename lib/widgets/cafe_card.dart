@@ -30,32 +30,58 @@ class _CafeCardState extends State<CafeCard> {
   }
 
   /// Kafenin ilk post fotoğrafını getir
+  /// Hibrit Fotoğraf Getirme: Önce kullanıcı postlarına, yoksa Google fotoğraflarına bakar.
   Future<void> _fetchCafeImage() async {
+    if (!mounted) return;
+    
     try {
       final supabase = Supabase.instance.client;
-      final response = await supabase
+
+      // 1. ADIM: cafe_postlar (Öncelik)
+      final postResponse = await supabase
           .from('cafe_postlar')
           .select('foto_url')
           .eq('cafe_id', widget.cafe.id)
-          .limit(1)
-          .maybeSingle();
+          .limit(1); // maybeSingle yerine liste olarak isteyelim
 
-      if (response != null && response['foto_url'] != null) {
+      if (postResponse != null && postResponse.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _postImageUrl = postResponse.first['foto_url'];
+            _isLoadingImage = false;
+          });
+        }
+        return;
+      }
+
+      // 2. ADIM: cafe_fotograflar (Yedek)
+      // .select() içine sadece 'foto_url' yazalım, bazen tüm sütunları çekmek RLS'e takılabilir
+      final googlePhotoResponse = await supabase
+          .from('cafe_fotograflar')
+          .select('foto_url')
+          .eq('cafe_id', widget.cafe.id);
+
+      // DEBUG LOGLARI
+      debugPrint("DEBUG: ${widget.cafe.kafeAdi} Sorgulanıyor...");
+      debugPrint("Gelen Yanıt: $googlePhotoResponse");
+
+      if (mounted) {
         setState(() {
-          _postImageUrl = response['foto_url'];
+          // Liste boş değilse ilk fotoğrafı al, boşsa null bırak
+          _postImageUrl = (googlePhotoResponse != null && googlePhotoResponse.isNotEmpty)
+              ? googlePhotoResponse.first['foto_url']
+              : null;
           _isLoadingImage = false;
         });
-      } else {
+      }
+    } catch (e) {
+      debugPrint('FOTOĞRAF ÇEKME HATASI (${widget.cafe.kafeAdi}): $e');
+      if (mounted) {
         setState(() {
           _postImageUrl = null;
           _isLoadingImage = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _postImageUrl = null;
-        _isLoadingImage = false;
-      });
     }
   }
 
