@@ -159,7 +159,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final messages = snapshot.data!;
+                
+                // Silinen mesajları filtrele
+                final allMessages = snapshot.data!;
+                final messages = allMessages.where((msg) {
+                  // Herkesten silinmiş mi?
+                  if (msg['deleted_for_everyone'] == true) {
+                    return false;
+                  }
+                  
+                  // Ben gönderdim ve benim için silinmiş mi?
+                  if (msg['sender_id'] == myId && msg['deleted_for_sender'] == true) {
+                    return false;
+                  }
+                  
+                  // Karşı taraf gönderdi ve benim için (alıcı olarak) silinmiş mi?
+                  if (msg['sender_id'] != myId && msg['deleted_for_receiver'] == true) {
+                    return false;
+                  }
+                  
+                  return true;
+                }).toList();
 
                 return ListView.builder(
                   reverse: true, // En yeni mesaj en altta
@@ -212,6 +232,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               }
             }
           : null,
+      onLongPress: () => _showMessageOptions(msg, isMe),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Column(
@@ -274,22 +295,35 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   // Koleksiyonlar için özel görsel kart tasarımı
   Widget _buildCollectionCard(String content, String? collectionId) {
-    return FutureBuilder<List<String>>(
-      future: _fetchCollectionPhotos(collectionId),
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _fetchCollectionData(collectionId),
       builder: (context, snapshot) {
-        final photos = snapshot.data ?? [];
-        return _buildCollectionCardUI(content, photos);
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingCard(content);
+        }
+        
+        final collectionData = snapshot.data;
+        if (collectionData == null) {
+          return _buildErrorCard(content);
+        }
+        
+        return _buildCollectionPreviewCard(collectionData);
       },
     );
   }
 
-  Future<List<String>> _fetchCollectionPhotos(String? collectionId) async {
-    if (collectionId == null) return [];
+  Future<Map<String, dynamic>?> _fetchCollectionData(String? collectionId) async {
+    if (collectionId == null) return null;
+    
     try {
-      final col = await _supabase
+      // 1. Koleksiyon bilgilerini çek
+      final collection = await _supabase
           .from('koleksiyonlar')
           .select('''
             id,
+            isim,
+            is_public,
+            user_id,
             koleksiyon_ogeleri (
               ilce_isimli_kafeler (id)
             )
@@ -297,10 +331,33 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           .eq('id', collectionId)
           .maybeSingle();
 
-      if (col == null) return [];
+      if (collection == null) return null;
 
+      // 2. Kullanıcı bilgisini ayrı çek
+      String ownerUsername = 'Anonim';
+      String? ownerAvatarUrl;
+      
+      if (collection['user_id'] != null) {
+        try {
+          final profile = await _supabase
+              .from('profiles')
+              .select('username, avatar_url')
+              .eq('id', collection['user_id'])
+              .maybeSingle();
+          
+          if (profile != null) {
+            ownerUsername = profile['username'] ?? 'Anonim';
+            ownerAvatarUrl = profile['avatar_url'];
+          }
+        } catch (e) {
+          debugPrint('Profil bilgisi alınamadı: $e');
+        }
+      }
+
+      // 3. Kafe fotoğraflarını çek
       List<String> photos = [];
-      final items = col['koleksiyon_ogeleri'] as List? ?? [];
+      final items = collection['koleksiyon_ogeleri'] as List? ?? [];
+      final cafeCount = items.length;
 
       for (var i = 0; i < items.length && i < 4; i++) {
         final cafe = items[i]['ilce_isimli_kafeler'];
@@ -321,104 +378,160 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           }
         }
       }
-      return photos;
+
+      return {
+        'id': collection['id'],
+        'name': collection['isim'] ?? 'Koleksiyon',
+        'isPublic': collection['is_public'] ?? true,
+        'cafeCount': cafeCount,
+        'photos': photos,
+        'ownerUsername': ownerUsername,
+        'ownerAvatarUrl': ownerAvatarUrl,
+        'ownerId': collection['user_id'],
+      };
     } catch (e) {
-      return [];
+      debugPrint('Koleksiyon verisi çekilemedi: $e');
+      return null;
     }
   }
 
-  Widget _buildCollectionCardUI(String content, List<String> photos) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        width: 240,
+  Widget _buildCollectionPreviewCard(Map<String, dynamic> data) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Foto alanı
+            // Fotoğraf bölümü
             SizedBox(
-              height: 130,
+              height: 180,
               width: double.infinity,
-              child: photos.isEmpty
-                  ? Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF346739), Color(0xFF79AE6F)],
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.collections_bookmark_rounded,
-                        color: Colors.white54,
-                        size: 44,
-                      ),
-                    )
-                  : photos.length == 1
-                  ? Image.network(
-                      photos[0],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (_, __, ___) => _greenGradientBox(),
-                    )
-                  : _buildPhotoGrid(photos),
+              child: _buildImageSection(data['photos'] as List<String>),
             ),
-            // Alt bilgi
+            // Bilgi bölümü
             Container(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF346739).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          "📍 Koleksiyon",
-                          style: TextStyle(
-                            color: Color(0xFF346739),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
+                  // Koleksiyon ismi
                   Text(
-                    content,
+                    data['name'],
                     style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF346739),
+                      height: 1.2,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
+                  
+                  // Kafe sayısı ve görünürlük
                   Row(
                     children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF79AE6F).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: Color(0xFF346739),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${data['cafeCount']} Kafe',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF346739),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      if (data['isPublic'])
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF346739).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(
+                                Icons.public,
+                                size: 12,
+                                color: Color(0xFF346739),
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'Açık',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF346739),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  // Kullanıcı bilgisi
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: const Color(0xFF79AE6F).withOpacity(0.2),
+                        backgroundImage: data['ownerAvatarUrl'] != null
+                            ? NetworkImage(data['ownerAvatarUrl'])
+                            : null,
+                        child: data['ownerAvatarUrl'] == null
+                            ? const Icon(
+                                Icons.person,
+                                color: Color(0xFF346739),
+                                size: 14,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '@${data['ownerUsername']}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF346739),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       const Icon(
                         Icons.touch_app_rounded,
-                        size: 12,
+                        size: 14,
                         color: Color(0xFF79AE6F),
-                      ),
-                      const SizedBox(width: 4),
-                      const Text(
-                        "Görüntülemek için tıkla",
-                        style: TextStyle(
-                          color: Color(0xFF79AE6F),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
                       ),
                     ],
                   ),
@@ -431,71 +544,167 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  Widget _greenGradientBox() {
+  Widget _buildImageSection(List<String> photos) {
+    if (photos.isEmpty) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF79AE6F), Color(0xFF346739)],
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.bookmark_rounded,
+            size: 60,
+            color: Colors.white.withOpacity(0.3),
+          ),
+        ),
+      );
+    }
+
+    // 1 foto: tam ekran
+    if (photos.length == 1) {
+      return Image.network(
+        photos[0],
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildDefaultBackground(),
+      );
+    }
+
+    // 2-4 foto: grid layout
+    final photoCount = photos.length > 4 ? 4 : photos.length;
+    
+    return Row(
+      children: [
+        // Sol: ilk foto (büyük)
+        Expanded(
+          child: Image.network(
+            photos[0],
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: const Color(0xFF79AE6F).withOpacity(0.5),
+            ),
+          ),
+        ),
+        // Sağ: diğer fotolar
+        if (photoCount > 1)
+          Expanded(
+            child: Column(
+              children: [
+                for (int i = 1; i < photoCount; i++)
+                  Expanded(
+                    child: Container(
+                      margin: EdgeInsets.only(
+                        left: 2,
+                        top: i > 1 ? 2 : 0,
+                      ),
+                      child: Image.network(
+                        photos[i],
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFF79AE6F).withOpacity(0.5),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultBackground() {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF346739), Color(0xFF79AE6F)],
+          colors: [Color(0xFF79AE6F), Color(0xFF346739)],
         ),
       ),
-      child: const Icon(
-        Icons.collections_bookmark_rounded,
-        color: Colors.white54,
-        size: 44,
+      child: Center(
+        child: Icon(
+          Icons.bookmark_rounded,
+          size: 60,
+          color: Colors.white.withOpacity(0.3),
+        ),
       ),
     );
   }
 
-  Widget _buildPhotoGrid(List<String> photos) {
-    if (photos.length == 2) {
-      return Row(
-        children: photos
-            .map(
-              (url) => Expanded(
-                child: Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  height: 130,
-                  errorBuilder: (_, __, ___) => _greenGradientBox(),
-                ),
-              ),
-            )
-            .toList(),
-      );
-    }
-    // 3-4 foto: büyük sol + sağda 2-3 küçük
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Image.network(
-            photos[0],
-            fit: BoxFit.cover,
-            height: 130,
-            errorBuilder: (_, __, ___) => _greenGradientBox(),
-          ),
+  Widget _buildLoadingCard(String content) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF9FCB98).withOpacity(0.5),
         ),
-        const SizedBox(width: 2),
-        Expanded(
-          child: Column(
-            children: [
-              for (var i = 1; i < photos.length && i < 4; i++) ...[
-                if (i > 1) const SizedBox(height: 2),
-                Expanded(
-                  child: Image.network(
-                    photos[i],
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    errorBuilder: (_, __, ___) => _greenGradientBox(),
-                  ),
-                ),
-              ],
-            ],
+      ),
+      child: Column(
+        children: [
+          const CircularProgressIndicator(
+            color: Color(0xFF346739),
+            strokeWidth: 2,
           ),
+          const SizedBox(height: 12),
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(String content) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.red.withOpacity(0.3),
         ),
-      ],
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 32,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Koleksiyon yüklenemedi',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.red,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -613,5 +822,160 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ),
       ),
     );
+  }
+
+  // Mesaj seçenekleri dialog'u
+  void _showMessageOptions(Map<String, dynamic> msg, bool isMe) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Kendim için sil
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.orange),
+              title: const Text('Benim İçin Sil'),
+              subtitle: const Text('Sadece sizin için silinir'),
+              onTap: () {
+                Navigator.pop(context);
+                _deleteMessageForMe(msg['id']);
+              },
+            ),
+            
+            // Herkesten sil (sadece gönderen görebilir)
+            if (isMe)
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text('Herkesten Sil'),
+                subtitle: const Text('Herkes için silinir'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showDeleteForEveryoneConfirmation(msg['id']);
+                },
+              ),
+            
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Herkesten silme onayı
+  void _showDeleteForEveryoneConfirmation(String messageId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Herkesten Sil?'),
+        content: const Text(
+          'Bu mesaj herkes için silinecek. Bu işlem geri alınamaz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteMessageForEveryone(messageId);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Mesajı sadece kendim için sil
+  Future<void> _deleteMessageForMe(String messageId) async {
+    try {
+      debugPrint('🗑️ Mesaj siliniyor (benim için): $messageId');
+      
+      final result = await _supabase.rpc(
+        'delete_message_for_user',
+        params: {
+          'p_message_id': messageId,
+          'p_user_id': _supabase.auth.currentUser!.id,
+          'p_delete_for_everyone': false,
+        },
+      );
+
+      debugPrint('✅ Silme sonucu: $result');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Mesaj silindi'),
+            backgroundColor: Color(0xFF346739),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Mesaj silme hatası: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Hata: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Mesajı herkesten sil
+  Future<void> _deleteMessageForEveryone(String messageId) async {
+    try {
+      debugPrint('🗑️ Mesaj siliniyor (herkesten): $messageId');
+      
+      final result = await _supabase.rpc(
+        'delete_message_for_user',
+        params: {
+          'p_message_id': messageId,
+          'p_user_id': _supabase.auth.currentUser!.id,
+          'p_delete_for_everyone': true,
+        },
+      );
+
+      debugPrint('✅ Silme sonucu: $result');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Mesaj herkesten silindi'),
+            backgroundColor: Color(0xFF346739),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Mesaj silme hatası: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Hata: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

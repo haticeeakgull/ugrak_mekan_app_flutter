@@ -30,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _vibeler = [];
 
   final GlobalKey _searchKey = GlobalKey();
-  double _searchBarHeight = 190; // header + spacing + search bar + safe area
 
   // --- YENİ RENK PALETİ TANIMLARI ---
   final Color deepGreen = const Color(
@@ -48,14 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _currentUserEmail = supabase.auth.currentUser?.email;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkProfile();
-      // Search bar yüksekliğini ölç
-      final ctx = _searchKey.currentContext;
-      if (ctx != null) {
-        final box = ctx.findRenderObject() as RenderBox?;
-        if (box != null && mounted) {
-          setState(() => _searchBarHeight = box.size.height);
-        }
-      }
     });
   }
 
@@ -210,60 +201,56 @@ class _HomeScreenState extends State<HomeScreen> {
       // Klavye açıldığında içeriğin kaymasını ve taşma hatasını (overflow) engeller
       resizeToAvoidBottomInset: false,
       body: SafeArea(
-        child: Stack(
-          children: [
-            // 1. SONUÇ LİSTESİ — search bar'ın altından başlar
-            Positioned(
-              top: _isPanelOpen ? 0 : _searchBarHeight,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _isPanelOpen
-                  ? const SizedBox.shrink()
-                  : _isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(color: deepGreen),
-                    )
-                  : _results.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 80), // Üst padding artırıldı
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: _results.length,
-                      itemBuilder: (context, index) =>
-                          CafeCard(cafe: _results[index]),
-                    ),
-            ),
-
-            // 2. ARAMA PANELİ — üstte overlay
-            Align(
-              alignment: Alignment.topCenter,
-              child: ModernSearchExperience(
-                key: _searchKey,
-                vibeler: _vibeler,
-                semtler: _semtler,
-                onSearch: _startSearch,
-                onPanelToggle: (isOpen) {
-                  setState(() => _isPanelOpen = isOpen);
-                  // Panel kapandığında yüksekliği ölç
-                  if (!isOpen) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      final ctx = _searchKey.currentContext;
-                      if (ctx != null) {
-                        final box = ctx.findRenderObject() as RenderBox?;
-                        if (box != null && mounted) {
-                          setState(() => _searchBarHeight = box.size.height);
-                        }
-                      }
-                    });
-                  }
-                },
-                currentUserEmail: _currentUserEmail,
-                onLogout: _showLogoutDialog,
+        child: _isPanelOpen
+            ? Stack(
+                children: [
+                  // Panel açıkken search overlay tüm ekranı kaplar
+                  ModernSearchExperience(
+                    key: _searchKey,
+                    vibeler: _vibeler,
+                    semtler: _semtler,
+                    onSearch: _startSearch,
+                    onPanelToggle: (isOpen) {
+                      setState(() => _isPanelOpen = isOpen);
+                    },
+                    currentUserEmail: _currentUserEmail,
+                    onLogout: _showLogoutDialog,
+                  ),
+                ],
+              )
+            : Column(
+                children: [
+                  // 1. ARAMA PANELİ — üstte sabit
+                  ModernSearchExperience(
+                    key: _searchKey,
+                    vibeler: _vibeler,
+                    semtler: _semtler,
+                    onSearch: _startSearch,
+                    onPanelToggle: (isOpen) {
+                      setState(() => _isPanelOpen = isOpen);
+                    },
+                    currentUserEmail: _currentUserEmail,
+                    onLogout: _showLogoutDialog,
+                  ),
+                  
+                  // 2. SONUÇ LİSTESİ — search bar'ın hemen altında
+                  Expanded(
+                    child: _isLoading
+                        ? Center(
+                            child: CircularProgressIndicator(color: deepGreen),
+                          )
+                        : _results.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: _results.length,
+                            itemBuilder: (context, index) =>
+                                CafeCard(cafe: _results[index]),
+                          ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }

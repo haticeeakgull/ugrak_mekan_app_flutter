@@ -568,14 +568,41 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
           ),
           TextButton(
             onPressed: () async {
-              await widget.supabase
-                  .from('cafe_postlar')
-                  .delete()
-                  .eq('id', postId);
-              if (mounted) {
-                Navigator.pop(dialogContext);
-                widget.onDelete();
-                Navigator.pop(context);
+              try {
+                debugPrint('🗑️ Post siliniyor: $postId');
+                debugPrint('👤 Kullanıcı ID: ${widget.supabase.auth.currentUser?.id}');
+                
+                final response = await widget.supabase
+                    .from('cafe_postlar')
+                    .delete()
+                    .eq('id', postId)
+                    .select(); // Silinen veriyi döndür
+                
+                debugPrint('✅ Silme yanıtı: $response');
+                
+                if (mounted) {
+                  Navigator.pop(dialogContext);
+                  widget.onDelete();
+                  Navigator.pop(context);
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Post başarıyla silindi'),
+                      backgroundColor: Color(0xFF346739),
+                    ),
+                  );
+                }
+              } catch (e) {
+                debugPrint('❌ Post silme hatası: $e');
+                if (mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Silme hatası: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             child: const Text(

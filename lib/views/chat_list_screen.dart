@@ -104,61 +104,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildChatItem(Map<String, dynamic> chat, Map<String, dynamic> profile) {
-    return Dismissible(
-      key: Key(chat['id']),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(
-          Icons.delete_outline,
-          color: Colors.white,
-          size: 28,
-        ),
-      ),
-      confirmDismiss: (direction) async {
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Text('Sohbeti Sil'),
-            content: Text(
-              '${profile['username']} ile olan sohbeti kalıcı olarak silmek istediğine emin misin?\n\nBu işlem geri alınamaz.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Vazgeç'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Sil'),
-              ),
-            ],
-          ),
-        );
-        
-        if (confirm == true) {
-          // Silme işlemini yap
-          await _deleteChat(chat['id']);
-          // Stream otomatik güncellenecek
-          return true;
-        }
-        
-        return false;
-      },
-      child: Container(
+    return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -172,6 +118,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ],
         ),
         child: ListTile(
+          onLongPress: () => _showChatOptions(chat),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 8,
@@ -234,39 +181,128 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ),
         ),
+      );
+  }
+
+  // Sohbet seçenekleri dialog'u
+  void _showChatOptions(Map<String, dynamic> chat) {
+    final otherUserId = chat['user_one_id'] == myId
+        ? chat['user_two_id']
+        : chat['user_one_id'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Sohbeti sil
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('Sohbeti Sil'),
+              subtitle: const Text('Sohbet sizin için silinir'),
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteChatConfirmation(chat);
+              },
+            ),
+            
+            const SizedBox(height: 10),
+          ],
+        ),
       ),
     );
   }
 
+  // Sohbet silme onayı
+  void _showDeleteChatConfirmation(Map<String, dynamic> chat) async {
+    final otherUserId = chat['user_one_id'] == myId
+        ? chat['user_two_id']
+        : chat['user_one_id'];
+
+    // Kullanıcı bilgisini al
+    final profile = await _supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', otherUserId)
+        .maybeSingle();
+
+    final username = profile?['username'] ?? 'Kullanıcı';
+
+    if (!mounted) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text('Sohbeti Sil?'),
+        content: Text(
+          '$username ile olan sohbeti silmek istediğine emin misin?\n\nSohbet sadece senin için silinecek. Mesajlar karşı tarafta görünmeye devam edecek.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _deleteChat(chat['id']);
+    }
+  }
+
+  // Sohbeti kullanıcı için sil (soft delete)
   Future<void> _deleteChat(String chatId) async {
     try {
-      // Önce mesajları sil
-      final messagesDelete = await _supabase
-          .from('messages')
-          .delete()
-          .eq('chat_id', chatId);
-      
-      debugPrint('Mesajlar silindi: $messagesDelete');
-      
-      // Sonra chat'i sil
-      final chatDelete = await _supabase
-          .from('chats')
-          .delete()
-          .eq('id', chatId);
-      
-      debugPrint('Chat silindi: $chatDelete');
-      
+      final result = await _supabase.rpc(
+        'delete_chat_for_user',
+        params: {
+          'p_chat_id': chatId,
+          'p_user_id': myId,
+        },
+      );
+
+      debugPrint('✅ Sohbet silme sonucu: $result');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('✅ Sohbet kalıcı olarak silindi'),
+            content: const Text('✅ Sohbet silindi'),
             backgroundColor: deepGreen,
             duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      debugPrint('❌ Silme hatası: $e');
+      debugPrint('❌ Sohbet silme hatası: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

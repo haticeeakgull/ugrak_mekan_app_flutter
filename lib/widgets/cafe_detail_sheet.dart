@@ -128,18 +128,32 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
 
   Future<void> _deletePost(dynamic postId) async {
     try {
-      await supabase.from('cafe_postlar').delete().eq('id', postId);
+      debugPrint('🗑️ Post siliniyor: $postId');
+      debugPrint('👤 Kullanıcı ID: ${supabase.auth.currentUser?.id}');
+      
+      final response = await supabase
+          .from('cafe_postlar')
+          .delete()
+          .eq('id', postId)
+          .select(); // Silinen veriyi döndür
+      
+      debugPrint('✅ Silme yanıtı: $response');
+      
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Öneri başarıyla silindi.')),
+          const SnackBar(
+            content: Text('✅ Öneri başarıyla silindi.'),
+            backgroundColor: Color(0xFF346739),
+          ),
         );
       }
     } catch (e) {
+      debugPrint('❌ Post silme hatası: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Silme hatası: $e'),
+            content: Text('❌ Silme hatası: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
