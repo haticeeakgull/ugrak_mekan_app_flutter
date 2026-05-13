@@ -38,9 +38,17 @@ class CollectionService {
         debugPrint('   İlk koleksiyon: ${ownCollections[0]}');
       }
 
+      // Kendi koleksiyonlarına is_saved: false flag'ini ekle
+      for (var col in ownCollections) {
+        col['is_saved'] = false;
+      }
+
       // 2. Kullanıcının kaydettiği koleksiyonlar (sadece kendi profilinde)
       List<dynamic> savedCollections = [];
       if (isOwnProfile) {
+        debugPrint('💾 Kaydedilen koleksiyonlar sorgulanıyor...');
+        debugPrint('   User ID: $userId');
+        
         final savedData = await _supabase
             .from('saved_collections')
             .select('''
@@ -61,12 +69,16 @@ class CollectionService {
             .order('saved_at', ascending: false);
 
         debugPrint('💾 Kaydedilen koleksiyonlar: ${savedData.length} adet');
+        if (savedData.isNotEmpty) {
+          debugPrint('   İlk kaydedilen: ${savedData[0]}');
+        }
 
         // Kaydedilen koleksiyonları düzleştir ve "is_saved" flag'i ekle
         for (var item in savedData) {
           if (item['koleksiyonlar'] != null) {
             var collection = Map<String, dynamic>.from(item['koleksiyonlar']);
             collection['is_saved'] = true; // Kaydedilmiş koleksiyon işareti
+            debugPrint('   ✅ Kaydedilen koleksiyon eklendi: ${collection['isim']} (is_saved: true)');
             savedCollections.add(collection);
           }
         }
@@ -184,11 +196,18 @@ class CollectionService {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) throw 'Giriş yapmalısınız';
 
-    await _supabase
+    debugPrint('🗑️ Koleksiyon kayıtlardan kaldırılıyor:');
+    debugPrint('   User ID: $userId');
+    debugPrint('   Collection ID: $collectionId');
+
+    final result = await _supabase
         .from('saved_collections')
         .delete()
         .eq('user_id', userId)
-        .eq('collection_id', collectionId);
+        .eq('collection_id', collectionId)
+        .select(); // Silinen veriyi döndür
+
+    debugPrint('✅ Silme sonucu: $result');
   }
 
   // Koleksiyonun kaydedilip kaydedilmediğini kontrol et

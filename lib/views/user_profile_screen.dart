@@ -1144,9 +1144,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           itemCount: _userCollections.length,
           itemBuilder: (context, index) {
             final col = _userCollections[index];
+            final bool isSaved = col['is_saved'] ?? false;
+            // Kaydedilmiş koleksiyonlar için isMe false olmalı
+            final bool isOwner = !isSaved && isMe;
+            
             return CollectionCard(
               collection: col,
-              isMe: isMe,
+              isMe: isOwner,
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1172,6 +1176,54 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   await _changeCoverImage(col['id'].toString());
                 } else if (val == 'remove_cover') {
                   await _removeCoverImage(col['id'].toString());
+                } else if (val == 'unsave') {
+                  // Kaydetmeyi kaldır
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Kaydetmeyi Kaldır'),
+                      content: Text(
+                        '"${col['isim']}" koleksiyonunu kayıtlı koleksiyonlarınızdan kaldırmak istediğinize emin misiniz?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('İptal'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('Kaldır'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true) {
+                    try {
+                      await _collectionService.unsaveCollection(col['id'].toString());
+                      _loadAllProfileData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Koleksiyon kayıtlardan kaldırıldı'),
+                            backgroundColor: Color(0xFF346739),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Hata: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
                 }
               },
             );

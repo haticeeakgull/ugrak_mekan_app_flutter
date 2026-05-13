@@ -28,6 +28,14 @@ class CollectionCard extends StatelessWidget {
     final String? coverImage = collection['cover_image_url'];
     final dynamic cafePhotosRaw = collection['cafe_photos'];
     
+    // Debug - Koleksiyon bilgilerini yazdır
+    debugPrint('🔍 CollectionCard Debug:');
+    debugPrint('   Koleksiyon: $name');
+    debugPrint('   isMe: $isMe');
+    debugPrint('   isSaved: $isSaved');
+    debugPrint('   ownerUsername: $ownerUsername');
+    debugPrint('   Menü gösterilecek mi? ${isMe || isSaved}');
+    
     // cafe_photos'u List<String>'e dönüştür
     List<String> cafePhotos = [];
     if (cafePhotosRaw != null) {
@@ -35,11 +43,6 @@ class CollectionCard extends StatelessWidget {
         cafePhotos = cafePhotosRaw.map((e) => e.toString()).toList();
       }
     }
-    
-    // Debug
-    print('   Koleksiyon kartı: $name');
-    print('   Cover: $coverImage');
-    print('   Fotolar: $cafePhotos');
     
     // Cover image varsa onu kullan, yoksa kafe fotolarını kullan
     final bool hasCoverImage = coverImage != null && coverImage.isNotEmpty;
@@ -99,14 +102,15 @@ class CollectionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Üst kısım: menü butonları
-                    if (isMe)
+                    if (isMe || isSaved) // Kendi koleksiyonlarım veya kaydettiğim koleksiyonlar
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          _IconBtn(
-                            icon: Icons.ios_share_rounded,
-                            onTap: onShare,
-                          ),
+                          if (isMe) // Sadece kendi koleksiyonlarımda paylaş butonu
+                            _IconBtn(
+                              icon: Icons.ios_share_rounded,
+                              onTap: onShare,
+                            ),
                           PopupMenuButton<String>(
                             icon: Container(
                               padding: const EdgeInsets.all(6),
@@ -125,42 +129,88 @@ class CollectionCard extends StatelessWidget {
                             ),
                             onSelected: onMenuSelected,
                             itemBuilder: (_) => [
-                              // Kapak fotoğrafı varsa "Kaldır", yoksa "Ekle"
-                              if (coverImage != null && coverImage.isNotEmpty)
+                              // Kaydedilmiş koleksiyonsa sadece "Kaydetmeyi Kaldır" göster
+                              if (isSaved && !isMe)
                                 PopupMenuItem(
-                                  value: 'remove_cover',
+                                  value: 'unsave',
                                   child: Row(
                                     children: const [
                                       Icon(
-                                        Icons.hide_image_rounded,
+                                        Icons.bookmark_remove_rounded,
                                         size: 16,
-                                        color: Colors.orange,
+                                        color: Colors.redAccent,
                                       ),
                                       SizedBox(width: 8),
                                       Text(
-                                        'Kapak Fotoğrafını Kaldır',
+                                        'Kaydetmeyi Kaldır',
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.orange,
+                                          color: Colors.redAccent,
                                         ),
                                       ),
                                     ],
                                   ),
-                                )
-                              else
+                                ),
+                              // Kendi koleksiyonumsa tüm seçenekleri göster
+                              if (isMe) ...[
+                                // Kapak fotoğrafı varsa "Kaldır", yoksa "Ekle"
+                                if (coverImage != null && coverImage.isNotEmpty)
+                                  PopupMenuItem(
+                                    value: 'remove_cover',
+                                    child: Row(
+                                      children: const [
+                                        Icon(
+                                          Icons.hide_image_rounded,
+                                          size: 16,
+                                          color: Colors.orange,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Kapak Fotoğrafını Kaldır',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.orange,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else
+                                  PopupMenuItem(
+                                    value: 'cover',
+                                    child: Row(
+                                      children: const [
+                                        Icon(
+                                          Icons.photo_camera_rounded,
+                                          size: 16,
+                                          color: _deepGreen,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Kapak Fotoğrafı Ekle',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: _deepGreen,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 PopupMenuItem(
-                                  value: 'cover',
+                                  value: 'privacy',
                                   child: Row(
-                                    children: const [
+                                    children: [
                                       Icon(
-                                        Icons.photo_camera_rounded,
+                                        isPublic
+                                            ? Icons.lock_rounded
+                                            : Icons.public_rounded,
                                         size: 16,
                                         color: _deepGreen,
                                       ),
-                                      SizedBox(width: 8),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        'Kapak Fotoğrafı Ekle',
-                                        style: TextStyle(
+                                        isPublic ? 'Gizle' : 'Herkese Aç',
+                                        style: const TextStyle(
                                           fontSize: 13,
                                           color: _deepGreen,
                                         ),
@@ -168,48 +218,27 @@ class CollectionCard extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                              PopupMenuItem(
-                                value: 'privacy',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isPublic
-                                          ? Icons.lock_rounded
-                                          : Icons.public_rounded,
-                                      size: 16,
-                                      color: _deepGreen,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      isPublic ? 'Gizle' : 'Herkese Aç',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: _deepGreen,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: const [
-                                    Icon(
-                                      Icons.delete_outline_rounded,
-                                      size: 16,
-                                      color: Colors.redAccent,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Sil',
-                                      style: TextStyle(
-                                        fontSize: 13,
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: const [
+                                      Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 16,
                                         color: Colors.redAccent,
                                       ),
-                                    ),
-                                  ],
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Sil',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ],
