@@ -37,15 +37,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       });
 
       // Sohbet listesindeki 'son mesaj' bilgisini güncelle
-      await _supabase
-          .from('chats')
-          .update({
-            'last_message': collectionId != null
-                ? "📍 Bir koleksiyon paylaştı"
-                : content,
-            'last_message_time': DateTime.now().toIso8601String(),
-          })
-          .eq('id', widget.chatId);
+      await _supabase.from('chats').update({
+        'last_message':
+            collectionId != null ? "📍 Bir koleksiyon paylaştı" : content,
+        'last_message_time': DateTime.now().toIso8601String(),
+      }).eq('id', widget.chatId);
 
       _messageController.clear(); // Yazı alanını temizle
     } catch (e) {
@@ -139,10 +135,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const Text(
-              "Çevrimiçi",
-              style: TextStyle(color: Colors.green, fontSize: 12),
-            ),
           ],
         ),
       ),
@@ -159,7 +151,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                
+
                 // Silinen mesajları filtrele
                 final allMessages = snapshot.data!;
                 final messages = allMessages.where((msg) {
@@ -167,17 +159,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   if (msg['deleted_for_everyone'] == true) {
                     return false;
                   }
-                  
+
                   // Ben gönderdim ve benim için silinmiş mi?
-                  if (msg['sender_id'] == myId && msg['deleted_for_sender'] == true) {
+                  if (msg['sender_id'] == myId &&
+                      msg['deleted_for_sender'] == true) {
                     return false;
                   }
-                  
+
                   // Karşı taraf gönderdi ve benim için (alıcı olarak) silinmiş mi?
-                  if (msg['sender_id'] != myId && msg['deleted_for_receiver'] == true) {
+                  if (msg['sender_id'] != myId &&
+                      msg['deleted_for_receiver'] == true) {
                     return false;
                   }
-                  
+
                   return true;
                 }).toList();
 
@@ -214,7 +208,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     .select('user_id, isim')
                     .eq('id', msg['collection_id'])
                     .maybeSingle();
-                
+
                 if (mounted && collection != null) {
                   Navigator.push(
                     context,
@@ -236,9 +230,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Column(
-          crossAxisAlignment: isMe
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
@@ -266,11 +259,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                 ],
                 border: isCollection
-                    ? Border.all(color: const Color(0xFF9FCB98).withValues(alpha: 0.5))
+                    ? Border.all(
+                        color: const Color(0xFF9FCB98).withValues(alpha: 0.5))
                     : null,
               ),
               child: isCollection
-                  ? _buildCollectionCard(msg['content'], msg['collection_id']?.toString()) // Koleksiyon görünümü
+                  ? _buildCollectionCard(msg['content'],
+                      msg['collection_id']?.toString()) // Koleksiyon görünümü
                   : Text(
                       msg['content'],
                       style: TextStyle(
@@ -301,25 +296,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingCard(content);
         }
-        
+
         final collectionData = snapshot.data;
         if (collectionData == null) {
           return _buildErrorCard(content);
         }
-        
+
         return _buildCollectionPreviewCard(collectionData);
       },
     );
   }
 
-  Future<Map<String, dynamic>?> _fetchCollectionData(String? collectionId) async {
+  Future<Map<String, dynamic>?> _fetchCollectionData(
+      String? collectionId) async {
     if (collectionId == null) return null;
-    
+
     try {
       // 1. Koleksiyon bilgilerini çek
-      final collection = await _supabase
-          .from('koleksiyonlar')
-          .select('''
+      final collection = await _supabase.from('koleksiyonlar').select('''
             id,
             isim,
             is_public,
@@ -327,16 +321,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             koleksiyon_ogeleri (
               ilce_isimli_kafeler (id)
             )
-          ''')
-          .eq('id', collectionId)
-          .maybeSingle();
+          ''').eq('id', collectionId).maybeSingle();
 
       if (collection == null) return null;
 
       // 2. Kullanıcı bilgisini ayrı çek
       String ownerUsername = 'Anonim';
       String? ownerAvatarUrl;
-      
+
       if (collection['user_id'] != null) {
         try {
           final profile = await _supabase
@@ -344,7 +336,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               .select('username, avatar_url')
               .eq('id', collection['user_id'])
               .maybeSingle();
-          
+
           if (profile != null) {
             ownerUsername = profile['username'] ?? 'Anonim';
             ownerAvatarUrl = profile['avatar_url'];
@@ -363,6 +355,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         final cafe = items[i]['ilce_isimli_kafeler'];
         if (cafe == null) continue;
 
+        // Önce kullanıcı postlarından fotoğraf ara
         final postFoto = await _supabase
             .from('cafe_postlar')
             .select('foto_url')
@@ -372,9 +365,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             .maybeSingle();
 
         if (postFoto != null && postFoto['foto_url'] != null) {
-          final url = postFoto['foto_url'] as String;
-          if (!url.contains('googleapis')) {
-            photos.add(url);
+          photos.add(postFoto['foto_url'] as String);
+        } else {
+          // Post yoksa, cafe_fotograflar tablosundan Google fotoğraflarını çek
+          final googlePhotos = await _supabase
+              .from('cafe_fotograflar')
+              .select('foto_url')
+              .eq('cafe_id', cafe['id'])
+              .limit(1)
+              .maybeSingle();
+
+          if (googlePhotos != null && googlePhotos['foto_url'] != null) {
+            final photoPath = googlePhotos['foto_url'] as String;
+            // Eğer tam URL değilse, Supabase storage'dan public URL oluştur
+            if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
+              photos.add(photoPath);
+            } else {
+              try {
+                final publicUrl = _supabase.storage.from('cafe_photos').getPublicUrl(photoPath);
+                photos.add(publicUrl);
+              } catch (e) {
+                debugPrint('Public URL oluşturulamadı: $e');
+              }
+            }
           }
         }
       }
@@ -429,7 +442,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 10),
-                  
+
                   // Kafe sayısı ve görünürlük
                   Row(
                     children: [
@@ -495,15 +508,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Kullanıcı bilgisi
                   Row(
                     children: [
                       CircleAvatar(
                         radius: 14,
-                        backgroundColor: const Color(0xFF79AE6F).withOpacity(0.2),
+                        backgroundColor:
+                            const Color(0xFF79AE6F).withOpacity(0.2),
                         backgroundImage: data['ownerAvatarUrl'] != null
                             ? NetworkImage(data['ownerAvatarUrl'])
                             : null,
@@ -575,7 +589,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     // 2-4 foto: grid layout
     final photoCount = photos.length > 4 ? 4 : photos.length;
-    
+
     return Row(
       children: [
         // Sol: ilk foto (büyük)
@@ -740,15 +754,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
             FutureBuilder(
-              future: _supabase
-                  .from('koleksiyonlar')
-                  .select('''
+              future: _supabase.from('koleksiyonlar').select('''
                     id, isim,
                     koleksiyon_ogeleri (
                       ilce_isimli_kafeler (id)
                     )
-                  ''')
-                  .eq('user_id', myId),
+                  ''').eq('user_id', myId),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Padding(
@@ -847,7 +858,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Kendim için sil
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.orange),
@@ -858,7 +869,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 _deleteMessageForMe(msg['id']);
               },
             ),
-            
+
             // Herkesten sil (sadece gönderen görebilir)
             if (isMe)
               ListTile(
@@ -870,7 +881,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   _showDeleteForEveryoneConfirmation(msg['id']);
                 },
               ),
-            
+
             const SizedBox(height: 10),
           ],
         ),
@@ -909,7 +920,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _deleteMessageForMe(String messageId) async {
     try {
       debugPrint('🗑️ Mesaj siliniyor (benim için): $messageId');
-      
+
       final result = await _supabase.rpc(
         'delete_message_for_user',
         params: {
@@ -946,7 +957,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _deleteMessageForEveryone(String messageId) async {
     try {
       debugPrint('🗑️ Mesaj siliniyor (herkesten): $messageId');
-      
+
       final result = await _supabase.rpc(
         'delete_message_for_user',
         params: {

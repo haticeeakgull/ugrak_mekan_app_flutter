@@ -67,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .select('user_id, isim')
               .eq('id', collectionId)
               .maybeSingle();
-          
+
           if (mounted && collection != null) {
             Navigator.push(
               context,
@@ -120,16 +120,16 @@ class _HomeScreenState extends State<HomeScreen> {
     double? userLng,
   ) async {
     setState(() => _isLoading = true);
-    
+
     try {
       List<Cafe> results;
-      
+
       // DIRECT: prefix'i varsa normal arama, yoksa AI arama
       if (dogalDil.startsWith('DIRECT:')) {
         // Normal arama - Ada göre
         final searchQuery = dogalDil.replaceFirst('DIRECT:', '');
         debugPrint('🔍 Normal arama yapılıyor: "$searchQuery"');
-        
+
         results = await _apiService.searchCafesByName(
           searchQuery.isEmpty ? 'kafe' : searchQuery,
           il: il,
@@ -141,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else if (dogalDil.isNotEmpty) {
         // AI arama - Semantik anlam + yorumlar
         debugPrint('🤖 AI arama yapılıyor: "$dogalDil"');
-        
+
         results = await _apiService.searchCafes(
           dogalDil,
           il: il,
@@ -153,17 +153,17 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         // Sadece filtrelerle arama (AI değil)
         debugPrint('🔍 Filtre bazlı arama yapılıyor');
-        
+
         results = await _apiService.searchCafesByName(
           'kafe',
           il: il,
           semt: ilceler.isNotEmpty ? ilceler.first : null,
-          vibes: vibeler, // Artık liste olarak gönderiyoruz
+          vibes: vibeler,
           userLat: userLat,
           userLng: userLng,
         );
       }
-      
+
       setState(() {
         _results = results;
         _isLoading = false;
@@ -185,7 +185,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ? SnackBarAction(
                   label: 'Tekrar Dene',
                   textColor: Colors.white,
-                  onPressed: () => _startSearch(il, ilceler, vibeler, dogalDil, userLat, userLng),
+                  onPressed: () => _startSearch(
+                      il, ilceler, vibeler, dogalDil, userLat, userLng),
                 )
               : null,
         ),
@@ -232,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     currentUserEmail: _currentUserEmail,
                     onLogout: _showLogoutDialog,
                   ),
-                  
+
                   // 2. SONUÇ LİSTESİ — search bar'ın hemen altında
                   Expanded(
                     child: _isLoading
@@ -240,14 +241,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: CircularProgressIndicator(color: deepGreen),
                           )
                         : _results.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: _results.length,
-                            itemBuilder: (context, index) =>
-                                CafeCard(cafe: _results[index]),
-                          ),
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: _results.length,
+                                itemBuilder: (context, index) =>
+                                    CafeCard(cafe: _results[index]),
+                              ),
                   ),
                 ],
               ),

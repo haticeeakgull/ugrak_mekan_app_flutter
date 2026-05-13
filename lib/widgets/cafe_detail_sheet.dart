@@ -130,15 +130,15 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     try {
       debugPrint('🗑️ Post siliniyor: $postId');
       debugPrint('👤 Kullanıcı ID: ${supabase.auth.currentUser?.id}');
-      
+
       final response = await supabase
           .from('cafe_postlar')
           .delete()
           .eq('id', postId)
           .select(); // Silinen veriyi döndür
-      
+
       debugPrint('✅ Silme yanıtı: $response');
-      
+
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -210,15 +210,21 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       final user = supabase.auth.currentUser;
       if (user == null) throw "Giriş yapın.";
 
-      final yorumData = await supabase.from('cafe_yorumlar').insert({
-        'cafe_id': widget.cafe.id,
-        'kullanici_id': user.id,
-        'yorum_metni': commentText,
-      }).select().single();
+      final yorumData = await supabase
+          .from('cafe_yorumlar')
+          .insert({
+            'cafe_id': widget.cafe.id,
+            'kullanici_id': user.id,
+            'yorum_metni': commentText,
+          })
+          .select()
+          .single();
 
       // Embedding oluştur (arka planda)
       final yorumId = yorumData['id'];
-      _embeddingService.createYorumEmbedding(yorumId, commentText).catchError((e) {
+      _embeddingService
+          .createYorumEmbedding(yorumId, commentText)
+          .catchError((e) {
         debugPrint("⚠️ Yorum embedding oluşturulamadı: $e");
       });
 
@@ -252,7 +258,8 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
         // SBERT URL'den base URL çıkar, /sync-vectors ekle
         final sbertUrl = dotenv.env['SBERT_API_URL'] ?? '';
         if (sbertUrl.isEmpty) return;
-        final baseUrl = sbertUrl.replaceAll('/embed', '').trim().replaceAll("'", '');
+        final baseUrl =
+            sbertUrl.replaceAll('/embed', '').trim().replaceAll("'", '');
         final syncKey = dotenv.env['MY_SYNC_KEY'] ?? '';
 
         await http.get(
@@ -394,16 +401,15 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                       isPublic
                                           ? Icons.public
                                           : Icons.lock_outline,
-                                      color: isPublic
-                                          ? Colors.green
-                                          : Colors.grey,
+                                      color:
+                                          isPublic ? Colors.green : Colors.grey,
                                       size: 20,
                                     ),
                                     onPressed: () async {
                                       await supabase
                                           .from('koleksiyonlar')
-                                          .update({'is_public': !isPublic})
-                                          .eq('id', coll['id']);
+                                          .update({'is_public': !isPublic}).eq(
+                                              'id', coll['id']);
                                       setModalState(() {});
                                     },
                                   ),
@@ -415,11 +421,10 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                   await supabase
                                       .from('koleksiyon_ogeleri')
                                       .insert({
-                                        'koleksiyon_id': coll['id'],
-                                        'cafe_id': widget.cafe.id,
-                                        'user_id':
-                                            supabase.auth.currentUser!.id,
-                                      });
+                                    'koleksiyon_id': coll['id'],
+                                    'cafe_id': widget.cafe.id,
+                                    'user_id': supabase.auth.currentUser!.id,
+                                  });
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -544,9 +549,8 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                                   ),
                                                   onPressed: () =>
                                                       _showCollectionPicker(
-                                                        widget.cafe.id
-                                                            .toString(),
-                                                      ),
+                                                    widget.cafe.id.toString(),
+                                                  ),
                                                   tooltip: "Koleksiyona Kaydet",
                                                 ),
                                                 const Text(
@@ -579,15 +583,18 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
                                         .toList(),
                                   ),
                                   // Reason bilgisi (varsa)
-                                  if (widget.cafe.reason != null && widget.cafe.reason!.isNotEmpty) ...[
+                                  if (widget.cafe.reason != null &&
+                                      widget.cafe.reason!.isNotEmpty) ...[
                                     const SizedBox(height: 12),
                                     Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF346739).withOpacity(0.08),
+                                        color: const Color(0xFF346739)
+                                            .withOpacity(0.08),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: const Color(0xFF346739).withOpacity(0.2),
+                                          color: const Color(0xFF346739)
+                                              .withOpacity(0.2),
                                         ),
                                       ),
                                       child: Row(
@@ -960,22 +967,33 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
     );
   }
 
+  // Storage URL'sini geçerli public URL'ye dönüştür
+  String _getPublicUrl(String photoPath) {
+    // Eğer zaten tam URL ise (http veya https ile başlıyorsa) döndür
+    if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
+      return photoPath;
+    }
+
+    // cafe_photos bucket'ından public URL oluştur
+    try {
+      return supabase.storage.from('cafe_photos').getPublicUrl(photoPath);
+    } catch (e) {
+      debugPrint('Public URL oluşturulamadı: $e');
+      return photoPath;
+    }
+  }
+
   // Kafe fotoğrafları + post fotoğraflarını birleştir
   Future<List<String>> _getAllCafePhotos() async {
     List<String> allPhotos = [];
 
-    // 1. Cafe_gorselleri tablosundan fotoğraflar
-    final cafePhotos = widget.cafe.gorseller
-        .map((g) => g['foto_url'] as String)
-        .toList();
-    allPhotos.addAll(cafePhotos);
-
-    // 2. Post fotoğraflarını çek
+    // 1. ÖNCE: Kullanıcı postlarından fotoğraflar (cafe_postlar tablosundan)
     try {
       final posts = await supabase
           .from('cafe_postlar')
           .select('foto_listesi, foto_url')
-          .eq('cafe_id', widget.cafe.id);
+          .eq('cafe_id', widget.cafe.id)
+          .order('paylasim_tarihi', ascending: false);
 
       for (var post in posts) {
         // foto_listesi varsa onu kullan (birden fazla foto)
@@ -983,35 +1001,70 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
           final List<dynamic> fotoListesi = post['foto_listesi'];
           for (var foto in fotoListesi) {
             if (foto != null && foto.toString().isNotEmpty) {
-              allPhotos.add(foto.toString());
+              // Storage URL'sini geçerli public URL'ye dönüştür
+              final publicUrl = _getPublicUrl(foto.toString());
+              allPhotos.add(publicUrl);
             }
           }
         }
-        // foto_url varsa onu da ekle (eski postlar için)
-        else if (post['foto_url'] != null && post['foto_url'].toString().isNotEmpty) {
-          allPhotos.add(post['foto_url'].toString());
+        // foto_url varsa onu da ekle (eski postlar veya direkt URL'ler için)
+        else if (post['foto_url'] != null &&
+            post['foto_url'].toString().isNotEmpty) {
+          final publicUrl = _getPublicUrl(post['foto_url'].toString());
+          allPhotos.add(publicUrl);
         }
       }
     } catch (e) {
       debugPrint('Post fotoğrafları çekilemedi: $e');
     }
 
-    // Tekrar eden fotoğrafları kaldır
-    return allPhotos.toSet().toList();
+    // 2. SONRA: Google'dan çekilen fotoğraflar (cafe_fotograflar tablosundan)
+    try {
+      final googlePhotos = await supabase
+          .from('cafe_fotograflar')
+          .select('foto_url')
+          .eq('cafe_id', widget.cafe.id);
+
+      if (googlePhotos != null && googlePhotos.isNotEmpty) {
+        for (var photo in googlePhotos) {
+          if (photo['foto_url'] != null && photo['foto_url'].toString().isNotEmpty) {
+            final publicUrl = _getPublicUrl(photo['foto_url'].toString());
+            allPhotos.add(publicUrl);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Google fotoğrafları çekilemedi: $e');
+    }
+
+    // 3. SON OLARAK: Cafe_gorselleri tablosundan fotoğraflar (varsa)
+    final cafePhotos =
+        widget.cafe.gorseller.map((g) => g['foto_url'] as String).toList();
+    allPhotos.addAll(cafePhotos);
+
+    // Tekrar eden fotoğrafları kaldır ve sadece geçerli URL'leri tut
+    final uniquePhotos = <String>{};
+    for (var photo in allPhotos) {
+      if (photo.isNotEmpty) {
+        uniquePhotos.add(photo);
+      }
+    }
+
+    return uniquePhotos.toList();
   }
 }
 
 Widget _buildHeaderHandle() => Center(
-  child: Container(
-    width: 40,
-    height: 5,
-    margin: const EdgeInsets.symmetric(vertical: 12),
-    decoration: BoxDecoration(
-      color: Colors.grey[300],
-      borderRadius: BorderRadius.circular(10),
-    ),
-  ),
-);
+      child: Container(
+        width: 40,
+        height: 5,
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
@@ -1025,7 +1078,8 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     BuildContext context,
     double shrinkOffset,
     bool overlapsContent,
-  ) => Container(color: Colors.white, child: _tabBar);
+  ) =>
+      Container(color: Colors.white, child: _tabBar);
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
 }
