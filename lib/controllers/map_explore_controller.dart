@@ -8,12 +8,13 @@ class MapExploreController extends ChangeNotifier {
 
   GoogleMapController? mapController;
   PageController? _pageController;
+  int _pageControllerInitialPage = 0;
   
   PageController get pageController {
     if (_pageController == null || !_pageController!.hasClients) {
       _pageController = PageController(
         viewportFraction: 0.88,
-        initialPage: currentCafeIndex,
+        initialPage: _pageControllerInitialPage,
       );
     }
     return _pageController!;
@@ -179,7 +180,23 @@ class MapExploreController extends ChangeNotifier {
 
   void onMarkerTapped(int index) {
     debugPrint('🎯 Marker tapped: index=$index, cafe=${kafeler[index]['kafe_adi']}');
+    
+    // Eğer kartlar zaten açıksa ve PageController varsa, sadece sayfayı değiştir
+    if (showCafeCards && _pageController != null && _pageController!.hasClients) {
+      _pageController!.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      currentCafeIndex = index;
+      updateMarkers();
+      notifyListeners();
+      return;
+    }
+    
+    // İlk açılışta yeni PageController oluştur
     currentCafeIndex = index;
+    _pageControllerInitialPage = index;
     showCafeCards = true;
     
     // PageController'ı yeniden oluştur doğru initial page ile
@@ -192,16 +209,57 @@ class MapExploreController extends ChangeNotifier {
     
     updateMarkers();
 
-    // Haritayı seçili kafeye odakla
-    mapController?.animateCamera(
-      CameraUpdate.newLatLng(
-        LatLng(
-          double.parse(kafeler[index]['latitude'].toString()),
-          double.parse(kafeler[index]['longitude'].toString()),
+    // Haritayı seçili kafeye yumuşak bir şekilde sürükle
+    _animateCameraToPosition(
+      LatLng(
+        double.parse(kafeler[index]['latitude'].toString()),
+        double.parse(kafeler[index]['longitude'].toString()),
+      ),
+      zoom: 15.0,
+      duration: 1200,
+    );
+    notifyListeners();
+  }
+
+  void onPageChanged(int index) {
+    debugPrint('📄 Page changed to: index=$index, cafe=${kafeler[index]['kafe_adi']}');
+    currentCafeIndex = index;
+    updateMarkers();
+    
+    // Haritayı yeni kafeye yumuşak ve yavaş bir şekilde sürükle
+    if (kafeler[index]['latitude'] != null && kafeler[index]['longitude'] != null) {
+      final target = LatLng(
+        double.parse(kafeler[index]['latitude'].toString()),
+        double.parse(kafeler[index]['longitude'].toString()),
+      );
+      
+      // Yumuşak geçiş için newLatLng kullan (zoom değişmez, sadece konum değişir)
+      mapController?.animateCamera(
+        CameraUpdate.newLatLng(target),
+      );
+    }
+    
+    notifyListeners();
+  }
+
+  // Yumuşak kamera animasyonu için yardımcı metod
+  Future<void> _animateCameraToPosition(
+    LatLng target, {
+    double? zoom,
+    int duration = 1000,
+  }) async {
+    if (mapController == null) return;
+    
+    // İlk marker tıklamasında zoom ile birlikte git
+    await mapController!.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: target,
+          zoom: zoom ?? 15.0,
+          tilt: 0,
         ),
       ),
     );
-    notifyListeners();
   }
 
   void toggleCafeCards(bool show) {

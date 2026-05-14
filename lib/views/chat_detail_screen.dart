@@ -22,30 +22,70 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _supabase = Supabase.instance.client;
   final TextEditingController _messageController = TextEditingController();
   final String myId = Supabase.instance.client.auth.currentUser!.id;
+  bool _isSending = false; // Mesaj gönderme durumu
 
   // Mesaj gönderme fonksiyonu
   void _sendMessage({String? text, String? collectionId}) async {
+    // Eğer zaten gönderiliyor ise, tekrar gönderme
+    if (_isSending) {
+      debugPrint('⚠️ Mesaj zaten gönderiliyor, bekleyin...');
+      return;
+    }
+
     final content = text ?? _messageController.text.trim();
-    if (content.isEmpty && collectionId == null) return;
+    
+    debugPrint('📤 Mesaj gönderiliyor...');
+    debugPrint('   Content: $content');
+    debugPrint('   Collection ID: $collectionId');
+    debugPrint('   Chat ID: ${widget.chatId}');
+    debugPrint('   Sender ID: $myId');
+    
+    if (content.isEmpty && collectionId == null) {
+      debugPrint('❌ İçerik boş, mesaj gönderilmedi');
+      return;
+    }
+
+    // Gönderme durumunu aktif et
+    setState(() => _isSending = true);
 
     try {
+      debugPrint('🔄 Supabase\'e mesaj ekleniyor...');
       await _supabase.from('messages').insert({
         'chat_id': widget.chatId,
         'sender_id': myId,
         'content': content,
         'collection_id': collectionId, // Koleksiyon ID'si varsa ekle
       });
+      debugPrint('✅ Mesaj Supabase\'e eklendi');
 
       // Sohbet listesindeki 'son mesaj' bilgisini güncelle
+      debugPrint('🔄 Chat güncelleniyor...');
       await _supabase.from('chats').update({
         'last_message':
             collectionId != null ? "📍 Bir koleksiyon paylaştı" : content,
         'last_message_time': DateTime.now().toIso8601String(),
       }).eq('id', widget.chatId);
+      debugPrint('✅ Chat güncellendi');
 
       _messageController.clear(); // Yazı alanını temizle
+      debugPrint('✅ Mesaj başarıyla gönderildi!');
     } catch (e) {
-      debugPrint("Mesaj gönderme hatası: $e");
+      debugPrint("❌ Mesaj gönderme hatası: $e");
+      
+      // Kullanıcıya hata göster
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Mesaj gönderilemedi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // Gönderme durumunu pasif et
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 
@@ -90,10 +130,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             const SizedBox(width: 8),
             // GÖNDER BUTONU
             CircleAvatar(
-              backgroundColor: const Color(0xFF346739),
+              backgroundColor: _isSending 
+                  ? Colors.grey 
+                  : const Color(0xFF346739),
               child: IconButton(
-                icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                onPressed: () => _sendMessage(),
+                icon: _isSending
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.send, color: Colors.white, size: 20),
+                onPressed: _isSending ? null : () => _sendMessage(),
               ),
             ),
           ],

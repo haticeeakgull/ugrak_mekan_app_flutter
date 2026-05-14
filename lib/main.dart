@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:ugrak_mekan_app/views/complete_profile_screen.dart';
 import 'package:ugrak_mekan_app/widgets/auth_wrapper.dart';
 import 'views/home_screen.dart';
@@ -15,11 +16,25 @@ void main() async {
   // .env dosyasını yüklüyoruz (Tüm API anahtarları burada olmalı)
   await dotenv.load(fileName: ".env");
 
-  // Supabase başlatma (EXPO_PUBLIC ön eklerini .env dosyanla eşleşecek şekilde korudum)
+  // Supabase başlatma
   await Supabase.initialize(
     url: dotenv.env['EXPO_PUBLIC_SUPABASE_URL'] ?? '',
     anonKey: dotenv.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
   );
+
+  // OneSignal başlatma
+  final oneSignalAppId = dotenv.env['ONESIGNAL_APP_ID'];
+  if (oneSignalAppId != null && oneSignalAppId.isNotEmpty && oneSignalAppId != 'YOUR_ONESIGNAL_APP_ID_HERE') {
+    debugPrint('🔔 OneSignal başlatılıyor...');
+    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+    OneSignal.initialize(oneSignalAppId);
+    
+    // Bildirim izni iste
+    await OneSignal.Notifications.requestPermission(true);
+    debugPrint('✅ OneSignal başlatıldı');
+  } else {
+    debugPrint('⚠️ OneSignal App ID bulunamadı. .env dosyasını kontrol edin.');
+  }
 
   runApp(const MyApp());
 }

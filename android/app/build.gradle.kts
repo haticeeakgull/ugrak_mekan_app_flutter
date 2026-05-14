@@ -56,3 +56,14 @@ tasks.withType<KotlinCompile>().configureEach {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Firebase BOM (Bill of Materials) - Tüm Firebase kütüphanelerinin versiyonlarını yönetir
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    
+    // Firebase Cloud Messaging
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    
+    // Firebase Analytics (opsiyonel ama önerilen)
+    implementation("com.google.firebase:firebase-analytics-ktx")
+}

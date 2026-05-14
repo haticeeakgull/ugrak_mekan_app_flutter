@@ -42,13 +42,15 @@ dependencies:
   google_sign_in: ^6.2.1
   share_plus: ^10.0.0
   app_links: ^6.4.1
-  image_cropper: ^7.0.0
+  image_cropper: 12.2.1
   path_provider: ^2.1.2
   flutter_animate: ^4.5.0
   google_maps_flutter: ^2.6.0
-
   geolocator: 10.1.0
   provider: ^6.1.5+1
+
+  # Push Notification için OneSignal
+  onesignal_flutter: ^5.2.5
 
 dev_dependencies:
   flutter_test:
