@@ -5,6 +5,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class BadgeService {
   final _supabase = Supabase.instance.client;
 
+  /// Badge ikonunu Supabase Storage'dan getir
+  String getBadgeIconUrl(String iconName) {
+    // Eğer tam URL verilmişse direkt döndür
+    if (iconName.startsWith('http')) {
+      return iconName;
+    }
+    
+    // .png uzantısı yoksa ekle
+    final fileName = iconName.endsWith('.png') ? iconName : '$iconName.png';
+    
+    // Supabase Storage'dan public URL oluştur
+    return _supabase.storage
+        .from('badge_icons')
+        .getPublicUrl(fileName);
+  }
+
   /// Kullanıcının tüm rozetlerini getir
   Future<List<Map<String, dynamic>>> getUserBadges(String userId) async {
     try {
@@ -21,7 +37,15 @@ class BadgeService {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      return List<Map<String, dynamic>>.from(response);
+      // Icon URL'lerini düzenle
+      final badges = List<Map<String, dynamic>>.from(response);
+      for (var badge in badges) {
+        if (badge['badges'] != null && badge['badges']['icon_url'] != null) {
+          badge['badges']['icon_url'] = getBadgeIconUrl(badge['badges']['icon_url']);
+        }
+      }
+
+      return badges;
     } catch (e) {
       debugPrint('❌ Rozet getirme hatası: $e');
       return [];
@@ -47,7 +71,15 @@ class BadgeService {
           .order('current_progress', ascending: false)
           .limit(5);
 
-      return List<Map<String, dynamic>>.from(response);
+      // Icon URL'lerini düzenle
+      final progress = List<Map<String, dynamic>>.from(response);
+      for (var item in progress) {
+        if (item['badges'] != null && item['badges']['icon_url'] != null) {
+          item['badges']['icon_url'] = getBadgeIconUrl(item['badges']['icon_url']);
+        }
+      }
+
+      return progress;
     } catch (e) {
       debugPrint('❌ İlerleme getirme hatası: $e');
       return [];
@@ -96,7 +128,15 @@ class BadgeService {
           .eq('is_active', true)
           .order('points', ascending: false);
 
-      return List<Map<String, dynamic>>.from(response);
+      // Icon URL'lerini düzenle
+      final badges = List<Map<String, dynamic>>.from(response);
+      for (var badge in badges) {
+        if (badge['icon_url'] != null) {
+          badge['icon_url'] = getBadgeIconUrl(badge['icon_url']);
+        }
+      }
+
+      return badges;
     } catch (e) {
       debugPrint('❌ Tüm rozetleri getirme hatası: $e');
       return [];

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'badge_detail_dialog.dart';
 
 Future<List<Map<String, dynamic>>> fetchUserBadges(String userId) async {
   try {
     final supabase = Supabase.instance.client;
+
+    debugPrint('🔍 Badge çekiliyor - User ID: $userId');
 
     // Hata mesajındaki 'hint' kısmına göre ilişki adını (fkey) açıkça belirttik:
     final response = await supabase
@@ -15,10 +18,12 @@ Future<List<Map<String, dynamic>>> fetchUserBadges(String userId) async {
         ''')
         .eq('user_id', userId);
 
-    debugPrint("Veri başarıyla geldi!");
+    debugPrint("✅ Badge verisi başarıyla geldi! Toplam: ${response.length}");
+    debugPrint("📦 Badge data: $response");
     return List<Map<String, dynamic>>.from(response);
-  } catch (e) {
-    debugPrint("Rozet hatası: $e");
+  } catch (e, stackTrace) {
+    debugPrint("❌ Badge çekme hatası: $e");
+    debugPrint("📍 Stack trace: $stackTrace");
     return [];
   }
 }
@@ -86,72 +91,80 @@ Widget buildBadgeSection(String userId) {
                     final String badgeTitle = badgeData?['title'] ?? 'Rozet';
                     final String? cafeName = cafeData?['kafe_adi'];
 
-                    return Container(
-                      width: 85,
-                      margin: const EdgeInsets.only(right: 12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircleAvatar(
-                            radius: 26,
-                            backgroundColor: const Color(0xFFFAF8F3),
-                            child: iconUrl.isNotEmpty
-                                ? ClipOval(
-                                    child: Image.network(
-                                      iconUrl,
-                                      width: 52,
-                                      height: 52,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Icon(
-                                          Icons.workspace_premium,
-                                          color: Color(0xFF79AE6F),
-                                          size: 24,
-                                        );
-                                      },
-                                      loadingBuilder: (context, child, loadingProgress) {
-                                        if (loadingProgress == null) return child;
-                                        return const Center(
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
+                    return GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => BadgeDetailDialog(badgeItem: item),
+                        );
+                      },
+                      child: Container(
+                        width: 85,
+                        margin: const EdgeInsets.only(right: 12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 26,
+                              backgroundColor: const Color(0xFFFAF8F3),
+                              child: iconUrl.isNotEmpty
+                                  ? ClipOval(
+                                      child: Image.network(
+                                        iconUrl,
+                                        width: 52,
+                                        height: 52,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return const Icon(
+                                            Icons.workspace_premium,
                                             color: Color(0xFF79AE6F),
-                                          ),
-                                        );
-                                      },
+                                            size: 24,
+                                          );
+                                        },
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return const Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Color(0xFF79AE6F),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.workspace_premium,
+                                      color: Color(0xFF79AE6F),
+                                      size: 24,
                                     ),
-                                  )
-                                : const Icon(
-                                    Icons.workspace_premium,
-                                    color: Color(0xFF79AE6F),
-                                    size: 24,
-                                  ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            badgeTitle,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (cafeName != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                cafeName,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: Colors.grey[600],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            const SizedBox(height: 6),
+                            Text(
+                              badgeTitle,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                        ],
+                            if (cafeName != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  cafeName,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     );
                   },
