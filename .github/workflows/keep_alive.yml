@@ -1,17 +1,19 @@
-name: Uğrak Projesi Space Uyanık Tutucu
+name: Uğrak Projesi Otomasyonu
 
-# Bu kısım otomasyonun ne zaman çalışacağını belirler
 on:
   schedule:
-    # Her 40 dakikada bir çalışması için Cron ifadesi
-    - cron: "*/40 * * * *"
-  # Manuel olarak test etmek istersen Actions sekmesinden başlatmanı sağlar
-  workflow_dispatch:
+    # Her 30 dakikada bir çalışır
+    - cron: "*/30 * * * *"
+  workflow_dispatch: # Manuel çalıştırmak için
 
 jobs:
-  ping_space:
+  maintenance:
     runs-on: ubuntu-latest
     steps:
-      - name: Hugging Face Space'e İstek At
+      - name: Space'i Uyanık Tut (Ping)
         run: |
-          curl -I https://huggingface.co/spaces/hakgul/ugrak-sbert-model
+          curl -I https://hakgul-ugrak-sbert-model.hf.space/
+
+      - name: Vektörleri Senkronize Et (Sync)
+        run: |
+          curl -X GET https://hakgul-ugrak-sbert-model.hf.space/sync-vectors
