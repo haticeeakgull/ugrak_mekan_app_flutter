@@ -2,9 +2,8 @@ name: Uğrak Projesi Otomasyonu
 
 on:
   schedule:
-    # Her 30 dakikada bir çalışır
     - cron: "*/30 * * * *"
-  workflow_dispatch: # Manuel çalıştırmak için
+  workflow_dispatch:
 
 jobs:
   maintenance:
@@ -12,8 +11,14 @@ jobs:
     steps:
       - name: Space'i Uyanık Tut (Ping)
         run: |
-          curl -I https://hakgul-ugrak-sbert-model.hf.space/
+          # 405 hatası almamak için -L (GET) kullanıyoruz
+          curl -L https://hakgul-ugrak-sbert-model.hf.space/
 
       - name: Vektörleri Senkronize Et (Sync)
+        env:
+          # GitHub Secrets'tan anahtarı çekip bir değişken olarak atıyoruz
+          MY_SECRET_KEY: ${{ secrets.SYNC_KEY }}
         run: |
-          curl -X GET https://hakgul-ugrak-sbert-model.hf.space/sync-vectors
+          # -H ile header ekliyoruz, anahtarı değişkenden okuyoruz
+          curl -X GET https://hakgul-ugrak-sbert-model.hf.space/sync-vectors \
+          -H "x-sync-key: $MY_SECRET_KEY"
