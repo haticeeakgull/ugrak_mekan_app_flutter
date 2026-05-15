@@ -100,19 +100,19 @@ class _CafeCardItemState extends State<CafeCardItem> {
         debugPrint('✅ ${allPhotos.length} kullanıcı postu bulundu');
       }
 
-      // 2. ADIM: cafe_fotograflar (Google fotoğrafları)
-      final googlePhotoResponse = await supabase
+      // 2. ADIM: cafe_fotograflar (Supabase Storage URL'leri)
+      final cafePhotosResponse = await supabase
           .from('cafe_fotograflar')
           .select('foto_url')
           .eq('cafe_id', cafe.id);
 
-      if (googlePhotoResponse != null && googlePhotoResponse.isNotEmpty) {
-        for (var photo in googlePhotoResponse) {
+      if (cafePhotosResponse != null && cafePhotosResponse.isNotEmpty) {
+        for (var photo in cafePhotosResponse) {
           if (photo['foto_url'] != null && !allPhotos.contains(photo['foto_url'])) {
             allPhotos.add(photo['foto_url']);
           }
         }
-        debugPrint('✅ Toplam ${allPhotos.length} fotoğraf (Google dahil)');
+        debugPrint('✅ Toplam ${allPhotos.length} fotoğraf (cafe_fotograflar dahil)');
       }
 
       // 3. ADIM: cafe_gorseller (Yedek - cafe modelinden gelen)

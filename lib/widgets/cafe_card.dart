@@ -30,7 +30,7 @@ class _CafeCardState extends State<CafeCard> {
   }
 
   /// Kafenin ilk post fotoğrafını getir
-  /// Hibrit Fotoğraf Getirme: Önce kullanıcı postlarına, yoksa Google fotoğraflarına bakar.
+  /// Önce kullanıcı postlarından, yoksa cafe_fotograflar'dan çeker
   Future<void> _fetchCafeImage() async {
     if (!mounted) return;
     
@@ -42,7 +42,7 @@ class _CafeCardState extends State<CafeCard> {
           .from('cafe_postlar')
           .select('foto_url')
           .eq('cafe_id', widget.cafe.id)
-          .limit(1); // maybeSingle yerine liste olarak isteyelim
+          .limit(1);
 
       if (postResponse != null && postResponse.isNotEmpty) {
         if (mounted) {
@@ -54,22 +54,17 @@ class _CafeCardState extends State<CafeCard> {
         return;
       }
 
-      // 2. ADIM: cafe_fotograflar (Yedek)
-      // .select() içine sadece 'foto_url' yazalım, bazen tüm sütunları çekmek RLS'e takılabilir
-      final googlePhotoResponse = await supabase
+      // 2. ADIM: cafe_fotograflar (Supabase Storage URL'leri)
+      final cafePhotosResponse = await supabase
           .from('cafe_fotograflar')
           .select('foto_url')
-          .eq('cafe_id', widget.cafe.id);
-
-      // DEBUG LOGLARI
-      debugPrint("DEBUG: ${widget.cafe.kafeAdi} Sorgulanıyor...");
-      debugPrint("Gelen Yanıt: $googlePhotoResponse");
+          .eq('cafe_id', widget.cafe.id)
+          .limit(1);
 
       if (mounted) {
         setState(() {
-          // Liste boş değilse ilk fotoğrafı al, boşsa null bırak
-          _postImageUrl = (googlePhotoResponse != null && googlePhotoResponse.isNotEmpty)
-              ? googlePhotoResponse.first['foto_url']
+          _postImageUrl = (cafePhotosResponse != null && cafePhotosResponse.isNotEmpty)
+              ? cafePhotosResponse.first['foto_url']
               : null;
           _isLoadingImage = false;
         });

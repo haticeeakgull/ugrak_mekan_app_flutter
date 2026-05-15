@@ -950,20 +950,36 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
             scrollDirection: Axis.horizontal,
             itemCount: allImages.length,
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            itemBuilder: (context, index) => Container(
-              margin: const EdgeInsets.only(right: 12),
-              width: 150,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                image: DecorationImage(
-                  image: NetworkImage(allImages[index]),
-                  fit: BoxFit.cover,
+            itemBuilder: (context, index) => GestureDetector(
+              onTap: () => _showFullScreenGallery(context, allImages, index),
+              child: Container(
+                margin: const EdgeInsets.only(right: 12),
+                width: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  image: DecorationImage(
+                    image: NetworkImage(allImages[index]),
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  // Tam ekran fotoğraf görüntüleyici
+  void _showFullScreenGallery(BuildContext context, List<String> images, int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _FullScreenGallery(
+          images: images,
+          initialIndex: initialIndex,
+        ),
+      ),
     );
   }
 
@@ -1018,23 +1034,22 @@ class _CafeDetailSheetState extends State<CafeDetailSheet>
       debugPrint('Post fotoğrafları çekilemedi: $e');
     }
 
-    // 2. SONRA: Google'dan çekilen fotoğraflar (cafe_fotograflar tablosundan)
+    // 2. SONRA: cafe_fotograflar tablosundan fotoğraflar (Supabase Storage)
     try {
-      final googlePhotos = await supabase
+      final cafePhotos = await supabase
           .from('cafe_fotograflar')
           .select('foto_url')
           .eq('cafe_id', widget.cafe.id);
 
-      if (googlePhotos != null && googlePhotos.isNotEmpty) {
-        for (var photo in googlePhotos) {
+      if (cafePhotos != null && cafePhotos.isNotEmpty) {
+        for (var photo in cafePhotos) {
           if (photo['foto_url'] != null && photo['foto_url'].toString().isNotEmpty) {
-            final publicUrl = _getPublicUrl(photo['foto_url'].toString());
-            allPhotos.add(publicUrl);
+            allPhotos.add(photo['foto_url'].toString());
           }
         }
       }
     } catch (e) {
-      debugPrint('Google fotoğrafları çekilemedi: $e');
+      debugPrint('cafe_fotograflar fotoğrafları çekilemedi: $e');
     }
 
     // 3. SON OLARAK: Cafe_gorselleri tablosundan fotoğraflar (varsa)
@@ -1082,4 +1097,156 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
       Container(color: Colors.white, child: _tabBar);
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
+}
+
+// Tam ekran fotoğraf galerisi
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenGallery({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Fotoğraf PageView
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.images.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              return InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Center(
+                  child: Image.network(
+                    widget.images[index],
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Icon(
+                          Icons.broken_image,
+                          color: Colors.white54,
+                          size: 64,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+          // Üst bar (kapat butonu ve sayaç)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 8,
+                right: 8,
+                bottom: 8,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.7),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Text(
+                    '${_currentIndex + 1} / ${widget.images.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance için
+                ],
+              ),
+            ),
+          ),
+          // Alt nokta göstergeleri (eğer 10'dan az fotoğraf varsa)
+          if (widget.images.length <= 10)
+            Positioned(
+              bottom: 30,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.images.length,
+                  (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentIndex == index
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
