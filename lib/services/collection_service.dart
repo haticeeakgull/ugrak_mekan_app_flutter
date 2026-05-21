@@ -121,20 +121,15 @@ class CollectionService {
                     }
                   }
 
-                  // Yoksa cafe_fotograflar'dan dene
-                  final cafeList = await _supabase
+                  // Yoksa cafe_fotograflar'dan dene (Supabase Storage)
+                  final cafePhotosList = await _supabase
                       .from('cafe_fotograflar')
                       .select('foto_url')
                       .eq('cafe_id', cafeId)
                       .limit(1);
 
-                  if (cafeList.isNotEmpty && cafeList[0]['foto_url'] != null) {
-                    final fotoUrl = cafeList[0]['foto_url'] as String;
-                    // Sadece Supabase Storage URL'lerini al
-                    if (fotoUrl.contains('supabase') || 
-                        fotoUrl.startsWith('http') && !fotoUrl.contains('googleapis')) {
-                      photos.add(fotoUrl);
-                    }
+                  if (cafePhotosList.isNotEmpty && cafePhotosList[0]['foto_url'] != null) {
+                    photos.add(cafePhotosList[0]['foto_url'] as String);
                   }
                 }
               } catch (e) {

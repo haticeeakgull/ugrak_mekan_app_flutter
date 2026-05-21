@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import "package:ugrak_mekan_app/views/auth_screen.dart";
 import 'package:ugrak_mekan_app/views/main_screen.dart';
+import 'package:ugrak_mekan_app/views/onboarding_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 
 class AuthWrapper extends StatefulWidget {
@@ -15,12 +17,26 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   final _supabase = Supabase.instance.client;
   String? _lastUserId;
+  bool _isCheckingOnboarding = true;
+  bool _shouldShowOnboarding = false;
 
   @override
   void initState() {
     super.initState();
+    _checkOnboardingStatus();
     // İlk açılışta kullanıcı varsa OneSignal'e login yap
     _initializeOneSignalForCurrentUser();
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final completed = prefs.getBool('onboarding_completed') ?? false;
+    if (mounted) {
+      setState(() {
+        _shouldShowOnboarding = !completed;
+        _isCheckingOnboarding = false;
+      });
+    }
   }
 
   Future<void> _initializeOneSignalForCurrentUser() async {
@@ -73,6 +89,28 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    // Onboarding kontrolü yapılıyor
+    if (_isCheckingOnboarding) {
+      return const AppScaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Onboarding gösterilmeli mi?
+    if (_shouldShowOnboarding) {
+      return WillPopScope(
+        onWillPop: () async => false, // Geri tuşunu devre dışı bırak
+        child: OnboardingScreen(
+          onComplete: () {
+            // Onboarding tamamlandığında state'i güncelle
+            setState(() {
+              _shouldShowOnboarding = false;
+            });
+          },
+        ),
+      );
+    }
+
     // Supabase'in anlık oturum durumunu dinliyoruz
     return StreamBuilder<AuthState>(
       stream: _supabase.auth.onAuthStateChange,

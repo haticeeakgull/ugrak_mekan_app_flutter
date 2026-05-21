@@ -50,6 +50,22 @@
                     android:scheme="https"
                     android:host="haticeeakgull.github.io" />
             </intent-filter>
+
+            <!-- Deep Link için intent filter -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="ugrakmekan"
+                    android:host="chat" />
+                <data
+                    android:scheme="ugrakmekan"
+                    android:host="notifications" />
+                <data
+                    android:scheme="ugrakmekan"
+                    android:host="home" />
+            </intent-filter>
         </activity>
 
         <activity

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/views/create_post_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import 'package:ugrak_mekan_app/services/onesignal_notification_service.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final List<Map<String, dynamic>> allPosts;
@@ -20,6 +21,7 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   late PageController _verticalController;
   final supabase = Supabase.instance.client;
+  final _notificationService = OneSignalNotificationService();
 
   @override
   void initState() {
@@ -78,6 +80,7 @@ class _HorizontalPostContainer extends StatefulWidget {
 
 class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
   late PageController _horizontalController;
+  final _notificationService = OneSignalNotificationService();
   int _currentPage = 0;
   bool isLiked = false;
   int likeCount = 0;
@@ -143,15 +146,36 @@ class _HorizontalPostContainerState extends State<_HorizontalPostContainer> {
 
     try {
       if (originalIsLiked) {
+        // Beğeniyi kaldır
         await widget.supabase.from('post_likes').delete().match({
           'post_id': widget.post['id'],
           'user_id': userId,
         });
       } else {
+        // Beğeni ekle
         await widget.supabase.from('post_likes').upsert({
           'post_id': widget.post['id'],
           'user_id': userId,
         });
+
+        // Bildirim gönder (sadece beğeni eklendiğinde)
+        final postOwnerId = widget.post['user_id'];
+        if (postOwnerId != null && postOwnerId != userId) {
+          // Kullanıcı bilgilerini al
+          final myProfile = await widget.supabase
+              .from('profiles')
+              .select('username')
+              .eq('id', userId)
+              .single();
+
+          // Bildirim gönder
+          _notificationService.sendLikeNotification(
+            likerId: userId,
+            postOwnerId: postOwnerId,
+            likerUsername: myProfile['username'] ?? 'Bir kullanıcı',
+            postId: widget.post['id'],
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

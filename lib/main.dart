@@ -5,9 +5,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:ugrak_mekan_app/views/complete_profile_screen.dart';
 import 'package:ugrak_mekan_app/widgets/auth_wrapper.dart';
+import 'package:ugrak_mekan_app/services/onesignal_notification_service.dart';
 import 'views/home_screen.dart';
 import 'package:ugrak_mekan_app/views/main_screen.dart';
 import "package:ugrak_mekan_app/views/user_profile_screen.dart";
+import 'package:ugrak_mekan_app/views/chat_detail_screen.dart';
+import 'package:ugrak_mekan_app/views/notifications_screen.dart';
+
+// Global navigator key for deep linking
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   // Flutter motorunun hazır olduğundan emin oluyoruz
@@ -31,6 +37,10 @@ void main() async {
     
     // Bildirim izni iste
     await OneSignal.Notifications.requestPermission(true);
+    
+    // Navigator key'i OneSignal servisine ata
+    OneSignalNotificationService.navigatorKey = navigatorKey;
+    
     debugPrint('✅ OneSignal başlatıldı');
   } else {
     debugPrint('⚠️ OneSignal App ID bulunamadı. .env dosyasını kontrol edin.');
@@ -50,6 +60,7 @@ class MyApp extends StatelessWidget {
     const Color vanilla = Color(0xFFFAF8F3);
 
     return MaterialApp(
+      navigatorKey: navigatorKey, // Deep linking için navigator key
       debugShowCheckedModeBanner: false,
       title: 'Uğrak',
       theme: ThemeData(
@@ -109,6 +120,22 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const HomeScreen(),
         '/complete-profile': (context) => const CompleteProfileScreen(),
         '/user-profile': (context) => const UserProfileScreen(),
+        '/notifications': (context) => const NotificationsScreen(),
+      },
+      onGenerateRoute: (settings) {
+        // Chat detail için dinamik route
+        if (settings.name == '/chat_detail') {
+          final args = settings.arguments as Map<String, dynamic>?;
+          if (args != null) {
+            return MaterialPageRoute(
+              builder: (context) => ChatDetailScreen(
+                chatId: args['chatId'] as String,
+                otherUser: args['otherUser'] as Map<String, dynamic>,
+              ),
+            );
+          }
+        }
+        return null;
       },
     );
   }

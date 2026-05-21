@@ -1,7 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ugrak_mekan_app/services/onesignal_notification_service.dart';
 
 class FollowService {
   final _supabase = Supabase.instance.client;
+  final _notificationService = OneSignalNotificationService();
 
   // Takip durumunu kontrol et
   Future<String> getFollowStatus(String followerId, String followingId) async {
@@ -35,16 +37,20 @@ class FollowService {
       'status': newStatus,
     });
 
-    // 3. Bildirim gönder (BURASI KRİTİK)
-    await _supabase.from('notifications').insert({
-      'sender_id': myId,
-      'receiver_id': targetId,
-      // DÜZELTME: Hesap gizliyse 'follow_request', açıksa 'follow' bildirimi gider.
-      // 'follow_accept' buraya ait değildir, sadece onay butonuna basıldığında kullanılır.
-      'type': isPrivate ? 'follow_request' : 'follow',
-      'is_read': false,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+    // 3. Kullanıcı bilgilerini al
+    final myProfile = await _supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', myId)
+        .single();
+
+    // 4. Bildirim gönder (Supabase + Push Notification)
+    await _notificationService.sendFollowNotification(
+      followerId: myId,
+      followedUserId: targetId,
+      followerUsername: myProfile['username'] ?? 'Bir kullanıcı',
+      isFollowRequest: isPrivate,
+    );
   }
 
   // Takibi bırak veya İsteği iptal et

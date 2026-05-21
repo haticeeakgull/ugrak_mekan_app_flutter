@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ugrak_mekan_app/views/follow_list_screen.dart';
 import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
+import 'package:ugrak_mekan_app/views/onboarding_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/collection_service.dart';
 import '../services/follow_service.dart';
@@ -93,6 +95,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             builder: (_) => const ReportMissingCafeScreen(),
           ),
         );
+        break;
+      case 'show_onboarding':
+        _resetOnboarding();
         break;
       case 'logout':
         _showLogoutDialog();
@@ -578,6 +583,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Future<void> _resetOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_completed', false);
+    
+    if (mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => const OnboardingScreen(),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -674,6 +693,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       const SizedBox(width: 12),
                       const Text(
                         'Eksik Kafe Bildir',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ],
+                  ),
+                ),
+                // Onboarding'i Tekrar Göster
+                PopupMenuItem<String>(
+                  value: 'show_onboarding',
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.info_outline,
+                          color: Colors.blue,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Tanıtımı Tekrar Göster',
                         style: TextStyle(fontSize: 15),
                       ),
                     ],

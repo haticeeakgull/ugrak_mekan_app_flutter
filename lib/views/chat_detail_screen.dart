@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:ugrak_mekan_app/views/collection_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import 'package:ugrak_mekan_app/services/onesignal_notification_service.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;
@@ -22,7 +23,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _supabase = Supabase.instance.client;
   final TextEditingController _messageController = TextEditingController();
   final String myId = Supabase.instance.client.auth.currentUser!.id;
+  final _notificationService = OneSignalNotificationService();
   bool _isSending = false; // Mesaj gönderme durumu
+  String? _tappedMessageId; // Tıklanan mesajın ID'si (timestamp göstermek için)
 
   // Mesaj gönderme fonksiyonu
   void _sendMessage({String? text, String? collectionId}) async {
@@ -66,6 +69,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         'last_message_time': DateTime.now().toIso8601String(),
       }).eq('id', widget.chatId);
       debugPrint('✅ Chat güncellendi');
+
+      // Push notification gönder
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', myId)
+          .single();
+
+      final messageText = collectionId != null 
+          ? "📍 Bir koleksiyon paylaştı" 
+          : content;
+
+      await _notificationService.sendMessageNotification(
+        senderId: myId,
+        receiverId: widget.otherUser['id'],
+        senderUsername: myProfile['username'] ?? 'Bir kullanıcı',
+        messageText: messageText,
+        chatId: widget.chatId,
+      );
 
       _messageController.clear(); // Yazı alanını temizle
       debugPrint('✅ Mesaj başarıyla gönderildi!');
@@ -234,7 +256,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     final msg = messages[index];
                     final isMe = msg['sender_id'] == myId;
 
-                    return _buildMessageBubble(msg, isMe);
+                    // Mesaj gruplama mantığı: bir sonraki mesaj aynı kişiden mi?
+                    final bool isLastInGroup = index == 0 || 
+                        messages[index - 1]['sender_id'] != msg['sender_id'];
+
+                    return _buildMessageBubble(msg, isMe, isLastInGroup);
                   },
                 );
               },
@@ -246,8 +272,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> msg, bool isMe) {
+  Widget _buildMessageBubble(Map<String, dynamic> msg, bool isMe, bool isLastInGroup) {
     final bool isCollection = msg['collection_id'] != null;
+    final String messageId = msg['id'].toString();
+    final bool showTimestamp = _tappedMessageId == messageId || isLastInGroup;
 
     return GestureDetector(
       onTap: isCollection
@@ -276,7 +304,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 debugPrint('Koleksiyon bilgisi alınamadı: $e');
               }
             }
-          : null,
+          : () {
+              // Normal mesaj: timestamp'i göster/gizle
+              setState(() {
+                if (_tappedMessageId == messageId) {
+                  _tappedMessageId = null; // Zaten gösteriliyorsa gizle
+                } else {
+                  _tappedMessageId = messageId; // Göster
+                }
+              });
+            },
       onLongPress: () => _showMessageOptions(msg, isMe),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -325,13 +362,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       ),
                     ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                timeago.format(DateTime.parse(msg['created_at']), locale: 'tr'),
-                style: const TextStyle(color: Colors.black38, fontSize: 10),
+            // Timestamp sadece grup içindeki son mesajda veya tıklanmışsa göster
+            if (showTimestamp)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  timeago.format(DateTime.parse(msg['created_at']), locale: 'tr'),
+                  style: const TextStyle(color: Colors.black38, fontSize: 10),
+                ),
               ),
-            ),
             const SizedBox(height: 4),
           ],
         ),
@@ -426,19 +465,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               .limit(1)
               .maybeSingle();
 
-          if (googlePhotos != null && googlePhotos['foto_url'] != null) {
-            final photoPath = googlePhotos['foto_url'] as String;
-            // Eğer tam URL değilse, Supabase storage'dan public URL oluştur
-            if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
-              photos.add(photoPath);
-            } else {
-              try {
-                final publicUrl = _supabase.storage.from('cafe_photos').getPublicUrl(photoPath);
-                photos.add(publicUrl);
-              } catch (e) {
-                debugPrint('Public URL oluşturulamadı: $e');
-              }
-            }
+          // Yoksa cafe_fotograflar'dan dene (Supabase Storage)
+          final cafePhotos = await _supabase
+              .from('cafe_fotograflar')
+              .select('foto_url')
+              .eq('cafe_id', cafe['id'])
+              .limit(1)
+              .maybeSingle();
+
+          if (cafePhotos != null && cafePhotos['foto_url'] != null) {
+            photos.add(cafePhotos['foto_url'] as String);
           }
         }
       }

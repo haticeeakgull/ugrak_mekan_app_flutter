@@ -128,14 +128,12 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.coffee_rounded, size: 80, color: deepGreen),
-              const SizedBox(height: 10),
-              const Text(
-                "UĞRAK",
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: deepGreen,
+              ClipOval(
+                child: Image.asset(
+                  'assets/images/ugrakklogo.png',
+                  width: 150,
+                  height: 150,
+                  fit: BoxFit.cover,
                 ),
               ),
               const SizedBox(height: 30),

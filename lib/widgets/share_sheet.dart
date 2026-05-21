@@ -24,12 +24,13 @@ void showAdvancedShareSheet(
   final supabase = Supabase.instance.client;
   final GlobalKey previewKey = GlobalKey();
 
+  // İlk bottom sheet: Kartı göster
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) => Container(
-      height: MediaQuery.of(context).size.height * 0.92,
+      height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -59,246 +60,345 @@ void showAdvancedShareSheet(
             ),
           ),
           
-          // Preview kartı
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: RepaintBoundary(
-              key: previewKey,
-              child: CollectionSharePreview(
-                collectionName: colName,
-                coverImageUrl: coverImageUrl,
-                cafePhotos: cafePhotos ?? [],
-                ownerUsername: ownerUsername ?? 'Kullanıcı',
-                ownerAvatarUrl: ownerAvatarUrl,
-                cafeCount: cafeCount ?? 0,
-                isPublic: isPublic ?? true,
+          // Preview kartı - Merkezde ve büyük
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: RepaintBoundary(
+                  key: previewKey,
+                  child: CollectionSharePreview(
+                    collectionName: colName,
+                    coverImageUrl: coverImageUrl,
+                    cafePhotos: cafePhotos ?? [],
+                    ownerUsername: ownerUsername ?? 'Kullanıcı',
+                    ownerAvatarUrl: ownerAvatarUrl,
+                    cafeCount: cafeCount ?? 0,
+                    isPublic: isPublic ?? true,
+                  ),
+                ),
               ),
             ),
           ),
           
-          const SizedBox(height: 20),
-          
-          // Paylaşım seçenekleri - Sabit layout (scroll yok)
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Kart ve link ile paylaş (WhatsApp, Instagram, diğerleri)
-                  _ShareOption(
-                    icon: Icons.share,
-                    iconColor: const Color(0xFF346739),
-                    title: 'Kart ve Link ile Paylaş',
-                    subtitle: 'WhatsApp, Instagram ve diğer uygulamalar',
-                    onTap: () async {
-                      final imageBytes = await captureCollectionPreview(previewKey);
-                      if (imageBytes != null) {
-                        final imagePath = await saveCollectionPreviewToFile(imageBytes);
-                        if (imagePath != null) {
-                          await Share.shareXFiles(
-                            [XFile(imagePath)],
-                            text: '$colName koleksiyonuma göz at!\nhttps://haticeeakgull.github.io/?koleksiyonId=$colId',
-                          );
-                        }
-                      }
-                      if (context.mounted) Navigator.pop(context);
-                    },
+          // Paylaş butonu - Kartın altında
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF346739),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  
-                  const SizedBox(height: 12),
-                  
-                  // Sadece link paylaş
-                  _ShareOption(
-                    icon: Icons.link,
-                    iconColor: Colors.blue,
-                    title: 'Sadece Link Paylaş',
-                    subtitle: 'Metin olarak paylaş',
-                    onTap: () {
-                      Share.share(
-                        '$colName koleksiyonuma göz at!\nhttps://haticeeakgull.github.io/?koleksiyonId=$colId',
-                      );
-                      Navigator.pop(context);
-                    },
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Uygulama içi paylaşım başlığı
-                  const Divider(),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'Uygulama İçinde Paylaş',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  // İkinci bottom sheet'i aç - Paylaşım seçenekleri
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    isDismissible: true,
+                    enableDrag: true,
+                    builder: (context) => DraggableScrollableSheet(
+                      initialChildSize: 0.6,
+                      minChildSize: 0.3,
+                      maxChildSize: 0.9,
+                      builder: (context, scrollController) => Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 10,
+                              offset: Offset(0, -2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Handle bar
+                            Container(
+                              margin: const EdgeInsets.only(top: 12, bottom: 8),
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            
+                            // Başlık
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              child: Text(
+                                "Paylaşım Seçenekleri",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            
+                            // Paylaşım seçenekleri
+                            Expanded(
+                              child: ListView(
+                                controller: scrollController,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                children: [
+                                  // Kart ve link ile paylaş (WhatsApp, Instagram, diğerleri)
+                                  _ShareOption(
+                                    icon: Icons.share,
+                                    iconColor: const Color(0xFF346739),
+                                    title: 'Kart ve Link ile Paylaş',
+                                    subtitle: 'WhatsApp, Instagram ve diğer uygulamalar',
+                                    onTap: () async {
+                                      final imageBytes = await captureCollectionPreview(previewKey);
+                                      if (imageBytes != null) {
+                                        final imagePath = await saveCollectionPreviewToFile(imageBytes);
+                                        if (imagePath != null) {
+                                          await Share.shareXFiles(
+                                            [XFile(imagePath)],
+                                            text: '$colName koleksiyonuma göz at!\nhttps://haticeeakgull.github.io/?koleksiyonId=$colId',
+                                          );
+                                        }
+                                      }
+                                      if (context.mounted) {
+                                        Navigator.pop(context); // Paylaşım sheet'ini kapat
+                                        Navigator.pop(context); // Kart sheet'ini kapat
+                                      }
+                                    },
+                                  ),
+                                  
+                                  const SizedBox(height: 12),
+                                  
+                                  // Sadece link paylaş
+                                  _ShareOption(
+                                    icon: Icons.link,
+                                    iconColor: Colors.blue,
+                                    title: 'Sadece Link Paylaş',
+                                    subtitle: 'Metin olarak paylaş',
+                                    onTap: () {
+                                      Share.share(
+                                        '$colName koleksiyonuma göz at!\nhttps://haticeeakgull.github.io/?koleksiyonId=$colId',
+                                      );
+                                      Navigator.pop(context); // Paylaşım sheet'ini kapat
+                                      Navigator.pop(context); // Kart sheet'ini kapat
+                                    },
+                                  ),
+                                  
+                                  const SizedBox(height: 24),
+                                  
+                                  // Uygulama içi paylaşım başlığı
+                                  const Divider(),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child: Text(
+                                      'Uygulama İçinde Paylaş',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  
+                                  // Arkadaşlara gönder
+                                  FutureBuilder<List<dynamic>>(
+                                    future: supabase
+                                        .from('profiles')
+                                        .select()
+                                        .neq('id', supabase.auth.currentUser!.id)
+                                        .limit(5),
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData) {
+                                        return const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(20),
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      }
+                                      
+                                      if (snapshot.data!.isEmpty) {
+                                        return Padding(
+                                          padding: const EdgeInsets.all(20),
+                                          child: Text(
+                                            'Henüz arkadaşın yok',
+                                            style: TextStyle(color: Colors.grey[600]),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        );
+                                      }
+                                      
+                                      return Column(
+                                        children: snapshot.data!.map((friend) {
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[50],
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: ListTile(
+                                              contentPadding: const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 8,
+                                              ),
+                                              leading: CircleAvatar(
+                                                radius: 24,
+                                                backgroundImage: friend['avatar_url'] != null
+                                                    ? NetworkImage(friend['avatar_url'])
+                                                    : null,
+                                                child: friend['avatar_url'] == null
+                                                    ? const Icon(Icons.person)
+                                                    : null,
+                                              ),
+                                              title: Text(
+                                                friend['username'] ?? 'Kullanıcı',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                              trailing: ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF346739),
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 20,
+                                                    vertical: 10,
+                                                  ),
+                                                  elevation: 0,
+                                                ),
+                                                onPressed: () async {
+                                                  try {
+                                                    debugPrint('🚀 Arkadaşa gönderiliyor...');
+                                                    debugPrint('   Friend ID: ${friend['id']}');
+                                                    debugPrint('   Friend Username: ${friend['username']}');
+                                                    debugPrint('   Collection ID: $colId');
+                                                    debugPrint('   Collection Name: $colName');
+                                                    
+                                                    await collectionService.sendToFriend(
+                                                      friend['id'],
+                                                      colId,
+                                                      colName,
+                                                    );
+                                                    
+                                                    if (context.mounted) {
+                                                      Navigator.pop(context); // Paylaşım sheet'ini kapat
+                                                      Navigator.pop(context); // Kart sheet'ini kapat
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Row(
+                                                            children: [
+                                                              const Icon(
+                                                                Icons.check_circle,
+                                                                color: Colors.white,
+                                                              ),
+                                                              const SizedBox(width: 12),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  '${friend['username']} kullanıcısına gönderildi! ✨',
+                                                                  style: const TextStyle(
+                                                                    fontSize: 15,
+                                                                    fontWeight: FontWeight.w500,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          backgroundColor: const Color(0xFF346739),
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          duration: const Duration(seconds: 3),
+                                                        ),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    debugPrint('❌ Gönderim hatası: $e');
+                                                    debugPrint('   Stack trace: ${StackTrace.current}');
+                                                    
+                                                    if (context.mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Row(
+                                                            children: [
+                                                              const Icon(
+                                                                Icons.error_outline,
+                                                                color: Colors.white,
+                                                              ),
+                                                              const SizedBox(width: 12),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  'Gönderilirken bir hata oluştu: $e',
+                                                                  style: const TextStyle(
+                                                                    fontSize: 15,
+                                                                    fontWeight: FontWeight.w500,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          backgroundColor: Colors.red,
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+                                                  }
+                                                },
+                                                child: const Text('Gönder'),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      );
+                                    },
+                                  ),
+                                  
+                                  const SizedBox(height: 20),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  
-                  // Arkadaşlara gönder
-                  FutureBuilder<List<dynamic>>(
-                    future: supabase
-                        .from('profiles')
-                        .select()
-                        .neq('id', supabase.auth.currentUser!.id)
-                        .limit(5),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      }
-                      
-                      if (snapshot.data!.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Text(
-                            'Henüz arkadaşın yok',
-                            style: TextStyle(color: Colors.grey[600]),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      }
-                      
-                      return Column(
-                        children: snapshot.data!.map((friend) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[50],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              leading: CircleAvatar(
-                                radius: 24,
-                                backgroundImage: friend['avatar_url'] != null
-                                    ? NetworkImage(friend['avatar_url'])
-                                    : null,
-                                child: friend['avatar_url'] == null
-                                    ? const Icon(Icons.person)
-                                    : null,
-                              ),
-                              title: Text(
-                                friend['username'] ?? 'Kullanıcı',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              trailing: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF346739),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 10,
-                                  ),
-                                  elevation: 0,
-                                ),
-                                onPressed: () async {
-                                  try {
-                                    debugPrint('🚀 Arkadaşa gönderiliyor...');
-                                    debugPrint('   Friend ID: ${friend['id']}');
-                                    debugPrint('   Friend Username: ${friend['username']}');
-                                    debugPrint('   Collection ID: $colId');
-                                    debugPrint('   Collection Name: $colName');
-                                    
-                                    await collectionService.sendToFriend(
-                                      friend['id'],
-                                      colId,
-                                      colName,
-                                    );
-                                    
-                                    if (context.mounted) {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.check_circle,
-                                                color: Colors.white,
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  '${friend['username']} kullanıcısına gönderildi! ✨',
-                                                  style: const TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          backgroundColor: const Color(0xFF346739),
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          duration: const Duration(seconds: 3),
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    debugPrint('❌ Gönderim hatası: $e');
-                                    debugPrint('   Stack trace: ${StackTrace.current}');
-                                    
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.error_outline,
-                                                color: Colors.white,
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  'Gönderilirken bir hata oluştu: $e',
-                                                  style: const TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          backgroundColor: Colors.red,
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  }
-                                },
-                                child: const Text('Gönder'),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                  
-                  const SizedBox(height: 20),
-                ],
+                  );
+                },
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.share, size: 24),
+                    SizedBox(width: 12),
+                    Text(
+                      'Paylaş',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
