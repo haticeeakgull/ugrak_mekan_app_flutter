@@ -407,6 +407,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           'following_id': notif['receiver_id'],
         });
 
+        // Takip edilen kişiye puan ekle (5 puan)
+        await _addFollowerPoints(notif['receiver_id']);
+
         // Kabul bildirimini gönder
         await _supabase.from('notifications').insert({
           'sender_id': notif['receiver_id'],
@@ -446,6 +449,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  // Takipçi puanı ekle (5 puan)
+  Future<void> _addFollowerPoints(String userId) async {
+    try {
+      // Mevcut puanları al
+      final profile = await _supabase
+          .from('profiles')
+          .select('weekly_points')
+          .eq('id', userId)
+          .single();
+
+      final currentPoints = profile['weekly_points'] ?? 0;
+      final newPoints = currentPoints + 5;
+
+      // Puanı güncelle
+      await _supabase
+          .from('profiles')
+          .update({'weekly_points': newPoints})
+          .eq('id', userId);
+
+      debugPrint('✅ Takipçi puanı eklendi: +5 puan (Toplam: $newPoints)');
+    } catch (e) {
+      debugPrint('❌ Takipçi puanı ekleme hatası: $e');
     }
   }
 }

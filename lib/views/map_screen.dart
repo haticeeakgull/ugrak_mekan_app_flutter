@@ -33,7 +33,7 @@ class MapScreen extends StatelessWidget {
           // 1. KATMAN: Harita Görseli (Zemin)
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: "com.example.ugrak_mekan_app",
+            userAgentPackageName: "com.haticeakgul.ugrak",
           ),
 
           // 2. KATMAN: Kafelerin İşaretçileri

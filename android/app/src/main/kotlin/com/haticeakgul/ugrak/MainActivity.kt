@@ -1,4 +1,4 @@
-package com.example.ugrak_mekan_app
+package com.haticeakgul.ugrak
 
 import io.flutter.embedding.android.FlutterActivity
 

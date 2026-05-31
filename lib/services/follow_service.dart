@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/services/onesignal_notification_service.dart';
 
@@ -37,14 +38,19 @@ class FollowService {
       'status': newStatus,
     });
 
-    // 3. Kullanıcı bilgilerini al
+    // 3. Eğer takip onaylandıysa (gizli hesap değilse), takip edilen kişiye puan ekle
+    if (!isPrivate) {
+      await _addFollowerPoints(targetId);
+    }
+
+    // 4. Kullanıcı bilgilerini al
     final myProfile = await _supabase
         .from('profiles')
         .select('username')
         .eq('id', myId)
         .single();
 
-    // 4. Bildirim gönder (Supabase + Push Notification)
+    // 5. Bildirim gönder (Supabase + Push Notification)
     await _notificationService.sendFollowNotification(
       followerId: myId,
       followedUserId: targetId,
@@ -53,8 +59,47 @@ class FollowService {
     );
   }
 
+  // Takipçi puanı ekle (5 puan)
+  Future<void> _addFollowerPoints(String userId) async {
+    try {
+      // Mevcut puanları al
+      final profile = await _supabase
+          .from('profiles')
+          .select('weekly_points')
+          .eq('id', userId)
+          .single();
+
+      final currentPoints = profile['weekly_points'] ?? 0;
+      final newPoints = currentPoints + 5;
+
+      // Puanı güncelle
+      await _supabase
+          .from('profiles')
+          .update({'weekly_points': newPoints})
+          .eq('id', userId);
+
+      debugPrint('✅ Takipçi puanı eklendi: +5 puan (Toplam: $newPoints)');
+    } catch (e) {
+      debugPrint('❌ Takipçi puanı ekleme hatası: $e');
+    }
+  }
+
   // Takibi bırak veya İsteği iptal et
   Future<void> unfollowUser(String myId, String targetId) async {
+    // Önce takip durumunu kontrol et
+    final followRecord = await _supabase
+        .from('follows')
+        .select('status')
+        .eq('follower_id', myId)
+        .eq('following_id', targetId)
+        .maybeSingle();
+
+    // Eğer takip durumu 'following' ise puan düşür
+    if (followRecord != null && followRecord['status'] == 'following') {
+      await _removeFollowerPoints(targetId);
+    }
+
+    // Takibi sil
     await _supabase.from('follows').delete().match({
       'follower_id': myId,
       'following_id': targetId,
@@ -66,6 +111,31 @@ class FollowService {
     //   'receiver_id': targetId,
     //   'type': 'follow_request'
     // });
+  }
+
+  // Takipçi puanını düşür (5 puan)
+  Future<void> _removeFollowerPoints(String userId) async {
+    try {
+      // Mevcut puanları al
+      final profile = await _supabase
+          .from('profiles')
+          .select('weekly_points')
+          .eq('id', userId)
+          .single();
+
+      final currentPoints = profile['weekly_points'] ?? 0;
+      final newPoints = (currentPoints - 5).clamp(0, double.infinity).toInt();
+
+      // Puanı güncelle
+      await _supabase
+          .from('profiles')
+          .update({'weekly_points': newPoints})
+          .eq('id', userId);
+
+      debugPrint('✅ Takipçi puanı düşürüldü: -5 puan (Toplam: $newPoints)');
+    } catch (e) {
+      debugPrint('❌ Takipçi puanı düşürme hatası: $e');
+    }
   }
 
   // Takipçileri getir

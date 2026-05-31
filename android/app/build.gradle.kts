@@ -1,6 +1,5 @@
 import java.util.Properties
 import java.io.FileInputStream
-
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -12,6 +11,14 @@ val env = Properties().apply {
     }
 }
 
+// 2. Keystore (Uygulama İmzalama) Bilgilerini Yükleyen Mantık (YENİ EKLENDİ 🔑)
+val keystoreProperties = Properties().apply {
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -19,7 +26,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.ugrak_mekan_app"
+    namespace = "com.haticeakgul.ugrak"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,25 +35,37 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // 3. Gerçek Mağaza İmzasını Yapılandırıyoruz (YENİ EKLENDİ 🔑)
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+            storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+            storePassword = keystoreProperties.getProperty("storePassword")
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.example.ugrak_mekan_app"
+        applicationId = "com.haticeakgul.ugrak"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // ✅ GOOGLE MAPS API (dokunmadım)
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = env.getProperty("GOOGLE_MAPS_API_KEY") ?: ""
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            // 4. ARTIK DEBUG DEĞİL, GERÇEK MAĞAZA İMZASINI KULLANIYORUZ (GÜNCELLENDİ ✅)
+            signingConfig = signingConfigs.getByName("release") 
+            
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
 
-// ✅ YENİ KOTLIN DSL (DOĞRU YER)
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
@@ -58,12 +77,7 @@ flutter {
 }
 
 dependencies {
-    // Firebase BOM (Bill of Materials) - Tüm Firebase kütüphanelerinin versiyonlarını yönetir
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    
-    // Firebase Cloud Messaging
     implementation("com.google.firebase:firebase-messaging-ktx")
-    
-    // Firebase Analytics (opsiyonel ama önerilen)
     implementation("com.google.firebase:firebase-analytics-ktx")
 }

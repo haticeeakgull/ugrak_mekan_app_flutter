@@ -130,7 +130,7 @@ class _AuthScreenState extends State<AuthScreen> {
             children: [
               ClipOval(
                 child: Image.asset(
-                  'assets/images/ugrakklogo.png',
+                  'assets/images/ugrak_logo.jpg',
                   width: 150,
                   height: 150,
                   fit: BoxFit.cover,

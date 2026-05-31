@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "448419147412",
+    "project_id": "ugrak-mekan-app-d3377",
+    "storage_bucket": "ugrak-mekan-app-d3377.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:448419147412:android:eb915bc43c0c31f709ce81",
+        "android_client_info": {
+          "package_name": "com.example.ugrak_mekan_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCc8blWsq1p0PAw9CqpJ2oMa1He43r5b24"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:448419147412:android:e15843c798efc72509ce81",
+        "android_client_info": {
+          "package_name": "com.haticeakgul.ugrak"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCc8blWsq1p0PAw9CqpJ2oMa1He43r5b24"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
