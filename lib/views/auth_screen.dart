@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -23,9 +24,13 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      // 1. Google Cloud Console'dan aldığın Web Client ID buraya gelecek
-      const webClientId =
-          '1072850470874-6lch2m9rv7nqauq5fgmpjjuli5n1ltbj.apps.googleusercontent.com';
+      // ÖNEMLI: Bu Google Cloud Console'dan aldığınız WEB Client ID olmalı
+      // (Android Client ID değil!)
+      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+
+      if (webClientId == null || webClientId.isEmpty) {
+        throw 'GOOGLE_WEB_CLIENT_ID .env dosyasında tanımlanmamış!';
+      }
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         serverClientId: webClientId,

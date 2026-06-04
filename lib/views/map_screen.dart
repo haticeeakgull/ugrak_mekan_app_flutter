@@ -47,7 +47,7 @@ class MapScreen extends StatelessWidget {
                     child: IconButton(
                       icon: const Icon(
                         Icons.location_on,
-                        color: const Color(0xFF346739),
+                        color: Color.fromRGBO(52, 103, 57, 1),
                         size: 35,
                       ),
                       onPressed: () => _detayGoster(context, kafe),

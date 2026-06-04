@@ -1,341 +1,318 @@
-# Ugrak Mekan App
+# 🌿 Uğrak - Kafe Keşif ve Sosyal Paylaşım Uygulaması
 
-Kafe keşif ve paylaşım platformu - Flutter ile geliştirilmiş mobil uygulama.
+**Uğrak**, yapay zeka destekli semantik arama ile kafe keşfini sosyal bir deneyime dönüştüren bir Flutter mobil uygulamasıdır. Kullanıcılar, doğal dil kullanarak kendilerine en uygun kafeleri bulabilir, deneyimlerini paylaşabilir ve arkadaşlarıyla etkileşime geçebilir.
 
-## 🚀 Hızlı Başlangıç
+## 📱 Projenin Amacı
 
-### Kurulum
+Uğrak, geleneksel arama yöntemlerinin ötesine geçerek, kullanıcıların "sakin ve kitap okumaya uygun" veya "laptop ile çalışılabilir" gibi doğal ifadelerle arama yapmasını sağlar. BERT ve SBERT modelleri kullanarak, yalnızca kafe isimlerine değil, kullanıcı yorumlarına ve post içeriklerine de semantik anlam analizi uygular.
 
+### Temel Özellikler
+- 🤖 **AI Destekli Semantik Arama**: Hugging Face'te barındırılan BERT/SBERT modelleri ile doğal dil anlama
+- 🗺️ **Harita Tabanlı Keşif**: Google Maps entegrasyonu ile konum bazlı kafe bulma
+- 💬 **Sosyal Etkileşim**: Yorum, post paylaşımı, arkadaş sistemi ve sohbet
+- 🏆 **Liderlik Tablosu**: Günlük aktivite bazlı sıralama sistemi
+- 🎯 **Kişiselleştirme**: Vibe etiketleri, koleksiyonlar ve rozet sistemi
+- 🔔 **Push Bildirimleri**: OneSignal entegrasyonu ile gerçek zamanlı bildirimler
+- 👨‍💼 **Admin Paneli**: Eksik kafe bildirimleri ve içerik yönetimi
+
+## 🛠️ Teknoloji Yığını
+
+### Frontend
+- **Flutter** `3.5.0+` - Cross-platform mobil geliştirme
+- **Dart SDK** `>=3.5.0 <4.0.0`
+
+### Backend ve Servisler
+- **Supabase** - Backend as a Service (Auth, Database, Storage, Edge Functions)
+  - PostgreSQL veritabanı
+  - Row Level Security (RLS) politikaları
+  - Realtime subscriptions
+  - Edge Functions (Liderlik tablosu güncellemeleri)
+- **Hugging Face Spaces** - AI Model barındırma
+  - BERT modeli (Embedding oluşturma)
+  - SBERT modeli (Semantik arama - 384 boyutlu)
+
+### Temel Bağımlılıklar
+```yaml
+# Backend & State Management
+supabase_flutter: ^2.0.0        # Supabase istemcisi
+provider: ^6.1.5                  # State management
+
+# Harita ve Konum
+google_maps_flutter: ^2.6.0      # Google Maps widget
+flutter_map: ^6.1.0               # Alternatif harita widget
+geolocator: ^10.1.0               # Konum servisleri
+latlong2: ^0.9.1                  # Koordinat işlemleri
+
+# UI & UX
+google_fonts: ^6.1.0              # Özel fontlar
+flutter_animate: ^4.5.0           # Animasyonlar
+image_picker: ^1.0.7              # Görsel seçimi
+image_cropper: ^12.2.1            # Görsel düzenleme
+
+# Sosyal & Paylaşım
+share_plus: ^10.0.0               # Paylaşım özellikleri
+app_links: ^6.4.1                 # Deep linking
+timeago: ^3.7.1                   # Zaman formatlama
+
+# Bildirimler
+onesignal_flutter: ^5.2.5         # Push bildirimler
+
+# Kimlik Doğrulama
+google_sign_in: ^6.2.1            # Google Auth
+
+# Utility
+flutter_dotenv: ^6.0.0            # Ortam değişkenleri
+http: ^1.1.0                      # HTTP istekleri
+path_provider: ^2.1.2             # Dosya yolları
+shared_preferences: ^2.2.2        # Lokal depolama
+```
+
+### Yapay Zeka Modelleri
+- **BERT**: Metin embedding oluşturma
+- **SBERT** (Sentence-BERT): 384 boyutlu semantik arama embeddinglari
+
+## 📋 Kurulum Adımları
+
+### Ön Gereksinimler
+1. **Flutter SDK** (3.5.0 veya üzeri)
+   ```bash
+   flutter --version
+   ```
+   İndirmek için: [flutter.dev](https://flutter.dev/docs/get-started/install)
+
+2. **Android Studio** veya **VS Code** (Flutter eklentileri ile)
+
+3. **Git**
+
+### 1. Projeyi Klonlayın
 ```bash
-# 1. Dependencies yükle
+git clone https://github.com/your-repo/ugrak_mekan_app.git
+cd ugrak_mekan_app
+```
+
+### 2. Bağımlılıkları Yükleyin
+```bash
 flutter pub get
+```
 
-# 2. Git hooks kur (otomatik testler için)
-setup-hooks.bat  # Windows
-bash setup-hooks.sh  # Linux/macOS
+### 3. Ortam Değişkenlerini Yapılandırın
+Proje kök dizininde `.env` dosyası bulunmalıdır. Aşağıdaki değişkenleri kendi değerlerinizle güncelleyin:
 
-# 3. Uygulamayı çalıştır
+```env
+# Supabase Yapılandırması
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Google Maps API
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+GOOGLE_WEB_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
+
+# Hugging Face AI Model Endpoints
+BERT_API_URL=https://your-bert-model.hf.space/embed
+SBERT_API_URL=https://your-sbert-model.hf.space/embed
+
+# Admin Yapılandırması
+MY_SYNC_KEY=your-sync-key
+ADMIN_EMAIL=admin@example.com, another-admin@example.com
+
+# OneSignal Push Notifications
+ONESIGNAL_APP_ID=your-onesignal-app-id
+```
+
+ **Güvenlik Notu**: `.env` dosyasını asla git'e commit etmeyin! `.gitignore` dosyasına eklenmiş olduğundan emin olun.
+
+### 4. Android Yapılandırması
+
+#### Google Maps API Key
+`android/app/src/main/AndroidManifest.xml` dosyasına API anahtarınızı ekleyin:
+```xml
+<meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="${GOOGLE_MAPS_API_KEY}"/>
+```
+
+#### Minimum SDK
+`android/app/build.gradle.kts` dosyasında:
+```kotlin
+minSdk = 21
+targetSdk = 34
+```
+
+### 5. iOS Yapılandırması (Opsiyonel)
+`ios/Runner/Info.plist` dosyasına konum izinleri ekleyin:
+```xml
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Uğrak, size yakın kafeleri gösterebilmek için konumunuza ihtiyaç duyar.</string>
+```
+
+### 6. Uygulamayı Çalıştırın
+
+**Debug Modu (Geliştirme):**
+```bash
 flutter run
 ```
 
-## 🧪 Test Sistemi
-
-### İstatistikler
-- **206 unit test** - %100 başarılı
-- **Execution time**: < 10 saniye
-- **Coverage**: ~1% (Internal logic focus - Supabase mocklanmadı)
-
-### Test Çalıştırma
-
+**Release Modu (APK):**
 ```bash
-# Testleri çalıştır
+flutter build apk --release
+```
+
+**APK dosyası:** `build/app/outputs/flutter-apk/app-release.apk`
+
+### 7. Test Çalıştırma
+```bash
 flutter test
-
-# Coverage ile
-flutter test --coverage
-
-# Makefile ile
-make test
-make test-coverage
 ```
 
-### Otomatik Test Sistemi
-
-#### ✅ Local (Git Hooks)
-- **Pre-commit**: Her `git commit` öncesi testler çalışır
-- **Pre-push**: Her `git push` öncesi analysis + testler çalışır
-- **Bypass**: `git commit --no-verify` veya `git push --no-verify`
-
-#### ✅ GitHub Actions (CI/CD)
-- **Push to main/develop**: Full pipeline (test + build + coverage)
-- **Pull Request**: Test + build + PR'a otomatik yorum
-- **Artifacts**: Test results, coverage, APK (30 gün)
-
-### Test Dağılımı
-
-| Kategori | Test Sayısı | Dosyalar |
-|----------|-------------|----------|
-| **Models** | 9 | `test/models/cafe_model_test.dart` |
-| **Services** | 79 | `test/services/*.dart` (6 dosya) |
-| **Utilities** | 77 | `test/utils/*.dart` (2 dosya) |
-| **Helpers** | 41 | `test/test_helpers.dart` |
-
-## 🛠️ Geliştirme
-
-### Makefile Komutları
-
-```bash
-make help              # Tüm komutları listele
-make setup             # Dependencies + hooks kur
-make test              # Testleri çalıştır
-make test-coverage     # Coverage ile test
-make analyze           # Code analysis
-make format            # Kodu formatla
-make build-android     # Android APK build (testlerle)
-make build-ios         # iOS build (testlerle)
-make clean             # Temizlik
-make ci                # CI checks (analyze + test)
-```
-
-### VS Code Kısayolları
-
-- `Ctrl+Shift+T` → Run Tests
-- `Ctrl+Shift+B` → Build APK (önce testler çalışır)
-- `Ctrl+Shift+P` → "Tasks: Run Task" → Diğer tasks
-
-## 📁 Proje Yapısı
+## 🏗️ Proje Yapısı
 
 ```
 ugrak_mekan_app/
 ├── lib/
-│   ├── models/            # Data models
-│   ├── services/          # Business logic
-│   ├── views/             # UI screens
-│   ├── widgets/           # Reusable widgets
-│   └── controllers/       # State management
-├── test/
-│   ├── models/            # Model tests (9 tests)
-│   ├── services/          # Service tests (79 tests)
-│   ├── utils/             # Utility tests (77 tests)
-│   └── test_helpers.dart  # Test utilities (41 tests)
-├── .github/workflows/     # CI/CD pipelines
-│   └── flutter-test.yml   # Test & build pipeline
-├── .githooks/             # Git hooks
-│   ├── pre-commit         # Commit öncesi testler
-│   └── pre-push           # Push öncesi analysis + testler
-└── coverage/              # Coverage reports
+│   ├── main.dart                    # Uygulama giriş noktası
+│   ├── models/                      # Veri modelleri
+│   │   ├── cafe_model.dart
+│   │   └── user_model.dart
+│   ├── views/                       # Ekran widget'ları
+│   │   ├── home_screen.dart         # Ana arama ekranı
+│   │   ├── auth_screen.dart         # Giriş/Kayıt
+│   │   ├── admin_panel_screen.dart  # Admin paneli
+│   │   ├── leaderboard_screen.dart  # Liderlik tablosu
+│   │   └── ...
+│   ├── widgets/                     # Yeniden kullanılabilir UI bileşenleri
+│   │   ├── cafe_card.dart
+│   │   ├── search_overlay.dart
+│   │   └── ...
+│   ├── services/                    # İş mantığı katmanı
+│   │   ├── api_service.dart         # AI arama servisi
+│   │   ├── supabase_service.dart    # Veritabanı işlemleri
+│   │   ├── admin_service.dart       # Admin operasyonları
+│   │   ├── embedding_service.dart   # AI embedding oluşturma
+│   │   └── ...
+│   └── controllers/                 # State yönetimi
+│       └── map_explore_controller.dart
+├── assets/
+│   └── images/
+│       └── ugrak_logo.jpg
+├── android/                         # Android yapılandırması
+├── ios/                             # iOS yapılandırması
+├── test/                            # Birim ve widget testleri
+├── .env                             # Ortam değişkenleri (GİZLİ)
+├── pubspec.yaml                     # Bağımlılıklar
+└── README.md
 ```
 
-## 🔧 Teknolojiler
+## 🔑 Önemli Yapılandırma Notları
 
-- **Flutter** Stable (Latest)
-- **Dart** >=3.5.0 <4.0.0
-- **Supabase** - Backend
-- **Google Maps** - Harita entegrasyonu
-- **GitHub Actions** - CI/CD
+### Supabase Veritabanı Şeması
+Uygulama aşağıdaki temel tablolara ihtiyaç duyar:
+- `ilce_isimli_kafeler` - Kafe bilgileri (il, ilce, koordinatlar, vibe_etiketleri)
+- `cafe_yorumlar` - Kullanıcı yorumları ve puanları
+- `cafe_postlar` - Kullanıcı gönderileri
+- `profiles` - Kullanıcı profilleri
+- `koleksiyonlar` - Kafe koleksiyonları
+- `notifications` - Bildirimler
+- `chat_conversations` & `chat_messages` - Mesajlaşma
 
-## 🤝 Katkıda Bulunma
+### Supabase RPC Fonksiyonları
+AI arama için aşağıdaki PostgreSQL fonksiyonları gereklidir:
+- `kafe_ara_ai_dynamic` - Semantik arama (SBERT embeddingler ile)
+- Günlük liderlik tablosu güncellemesi için Edge Function
 
-1. Fork yapın
-2. Feature branch oluşturun: `git checkout -b feature/amazing-feature`
-3. Değişikliklerinizi commit edin: `git commit -m 'feat: add amazing feature'`
-4. Branch'inizi push edin: `git push origin feature/amazing-feature`
-5. Pull Request oluşturun
+### Hugging Face Model Deployment
+1. BERT ve SBERT modellerinizi Hugging Face Spaces'e deploy edin
+2. Her model bir `/embed` endpoint'i sağlamalı
+3. Request format: `{"text": "arama sorgusu"}`
+4. Response format: `{"embedding": [0.1, 0.2, ..., 0.384]}`
 
-**Not**: Her commit ve push'ta testler otomatik çalışır!
+### OneSignal Push Notifications
+1. [OneSignal](https://onesignal.com/) hesabı oluşturun
+2. Yeni bir uygulama oluşturun
+3. App ID'yi `.env` dosyasına ekleyin
+4. Android/iOS için gerekli yapılandırmaları tamamlayın
 
-### Commit Mesajları
+## 🧪 Test ve CI/CD
 
-Conventional Commits formatı kullanın:
+Proje, GitHub Actions kullanarak otomatik test pipeline'ına sahiptir:
+- `.github/workflows/flutter-test.yml` - Her commit'te testleri çalıştırır
+- `.github/workflows/keep_alive.yml` - Hugging Face Spaces modellerini aktif tutar
 
-```
-feat: yeni özellik
-fix: hata düzeltme
-docs: dokümantasyon
-test: test ekleme/düzeltme
-refactor: kod iyileştirme
-style: format değişiklikleri
-chore: build/config değişiklikleri
-```
-
-## 🔄 CI/CD Pipeline
-
-### GitHub Actions Workflow
-
-**Tetikleyiciler**:
-- Push to `main`, `develop`, `master`
-- Pull requests
-- Manuel tetikleme
-
-**Pipeline Adımları**:
-1. **Test Job**
-   - Mock `.env` dosyası oluşturma
-   - Flutter stable (latest) kurulumu
-   - Dependencies yükleme
-   - Code analysis (`flutter analyze --no-fatal-infos`)
-   - 206 test çalıştırma
-   - Coverage raporu oluşturma
-   - Artifacts saklama (v4)
-
-2. **Build Android Job** (test başarılıysa)
-   - Mock `.env` dosyası oluşturma
-   - Release APK build
-   - APK artifact olarak saklama (v4)
-
-3. **Build iOS Job** (sadece main branch)
-   - Mock `.env` dosyası oluşturma
-   - iOS build (codesign olmadan)
-
-**Action Versions** (Güncel):
-- `actions/checkout@v4`
-- `actions/upload-artifact@v4`
-- `actions/github-script@v7`
-- `actions/setup-java@v4`
-- `codecov/codecov-action@v4`
-- `subosito/flutter-action@v2`
-
-**Not**: CI/CD'de `.env` dosyası mock değerlerle oluşturulur. Production değerleri GitHub Secrets'ta saklanmalıdır.
-
-### Git Hooks Kurulumu
-
+**Manuel test çalıştırma:**
 ```bash
-# Windows
-setup-hooks.bat
+# Tüm testler
+flutter test
 
-# Linux/macOS
-bash setup-hooks.sh
+# Belirli bir test dosyası
+flutter test test/services/admin_service_test.dart
+
+# Coverage raporu
+flutter test --coverage
 ```
 
-**Ne yapar?**
-- `.githooks/` içindeki hook'ları `.git/hooks/` dizinine kopyalar
-- Executable yapar
-- Her commit/push'ta otomatik test çalıştırır
+## 🚀 Deployment
+
+### Android (Google Play Store)
+```bash
+# App Bundle oluşturma (önerilen)
+flutter build appbundle --release
+
+# Dosya konumu: build/app/outputs/bundle/release/app-release.aab
+```
+
+### APK (Direkt kurulum)
+```bash
+flutter build apk --release --split-per-abi
+```
+
+### CodeMagic CI/CD
+Proje `codemagic.yaml` dosyasına sahiptir. CodeMagic ile otomatik build ve deployment yapılandırması mevcuttur.
 
 ## 🐛 Sorun Giderme
 
-### Hook'lar çalışmıyor
-```bash
-# Yeniden kur
-setup-hooks.bat  # Windows
-bash setup-hooks.sh  # Linux/macOS
-```
+### Yaygın Hatalar ve Çözümleri
 
-### Testler başarısız
+**1. "SBERT_API_URL bulunamadı"**
+- `.env` dosyasının proje kök dizininde olduğundan emin olun
+- `pubspec.yaml` içinde `.env` dosyasının assets'e eklendiğini kontrol edin
+
+**2. Google Maps görünmüyor**
+- Android Manifest'te API key'in doğru eklendiğini kontrol edin
+- Google Cloud Console'da Maps SDK'nın aktif olduğunu doğrulayın
+
+**3. OneSignal bildirimleri çalışmıyor**
+- ONESIGNAL_APP_ID'nin doğru girildiğini kontrol edin
+- Cihazda bildirim izinlerinin verildiğini doğrulayın
+
+**4. Supabase bağlantı hatası**
+- Supabase URL ve Anon Key'in güncel olduğunu kontrol edin
+- RLS (Row Level Security) politikalarının doğru yapılandırıldığından emin olun
+
+**5. Build hatası: "Execution failed for task ':app:processReleaseResources'"**
 ```bash
+cd android
+./gradlew clean
+cd ..
 flutter clean
 flutter pub get
-flutter test
+flutter build apk --release
 ```
-
-### Build hatası
-```bash
-flutter clean
-flutter pub get
-flutter build apk
-```
-
-### CI/CD başarısız
-```bash
-# Local'de aynı komutları çalıştır
-flutter analyze
-flutter test --coverage
-
-# Hataları düzelt ve tekrar push et
-```
-
-## 📊 Test Coverage Detayları
-
-### Neden Coverage Düşük?
-
-Coverage %1 olmasının nedeni **dış bağımlılıkları mocklamama** stratejisidir:
-- ❌ Supabase mocklaması YOK
-- ❌ HTTP client mocklaması YOK
-- ❌ Database mocklaması YOK
-
-Bu yaklaşım **internal logic testing**'e odaklanır.
-
-### Neyi Test Ediyoruz ✅
-
-1. **Data Models** - JSON serialization, transformations
-2. **Business Logic** - Calculations, algorithms, validations
-3. **Utility Functions** - Distance calculations (Haversine), time range checks
-4. **Internal Logic** - Filtering, sorting, state management
-
-### Neyi Test Etmiyoruz ❌
-
-1. **External Dependencies** - Supabase, HTTP, Auth
-2. **UI Components** - Widgets, interactions
-3. **Integration Points** - Database, API calls
-
-### Coverage Dağılımı
-
-- **cafe_model.dart**: 100% (35/35 lines)
-- **Utilities**: 100% (standalone implementations)
-- **Services**: ~0% (Supabase gerektirir)
-- **Views**: ~0% (Widget testing gerektirir)
-
-## 💡 Best Practices
-
-### ✅ Yapılması Gerekenler
-
-1. **Her commit öncesi test**
-   ```bash
-   make test
-   ```
-
-2. **Anlamlı commit mesajları**
-   ```bash
-   git commit -m "feat: add user authentication"
-   ```
-
-3. **PR öncesi CI/CD kontrolü**
-   - GitHub Actions'ın başarılı olmasını bekle
-
-4. **Hook'ları sadece acil durumlarda atla**
-   ```bash
-   git commit --no-verify  # Sadece acil durumlar
-   ```
-
-### ❌ Yapılmaması Gerekenler
-
-1. Hook'ları sürekli atlama
-2. Başarısız testlerle commit
-3. Coverage'ı görmezden gelme
-
-## 🎯 Workflow Örnekleri
-
-### Normal Development
-
-```bash
-# 1. Feature branch oluştur
-git checkout -b feature/new-feature
-
-# 2. Kod yaz ve test et
-make test
-
-# 3. Commit (otomatik test çalışır)
-git add .
-git commit -m "feat: add new feature"
-
-# 4. Push (otomatik analysis + test çalışır)
-git push origin feature/new-feature
-
-# 5. PR oluştur (CI/CD otomatik çalışır)
-```
-
-### Hızlı Fix
-
-```bash
-# 1. Fix yap ve test et
-make test
-
-# 2. Commit (hook'ları atla)
-git commit --no-verify -m "fix: emergency"
-
-# 3. Push (CI/CD yine de çalışır)
-git push
-```
-
-### Build Öncesi Test
-
-```bash
-# Makefile ile (otomatik test çalışır)
-make build-android
-
-# veya manuel
-flutter test && flutter build apk --release
-```
-
-## 📞 İletişim
-
-Sorularınız için issue açabilirsiniz.
 
 ## 📄 Lisans
 
-Bu proje özel bir projedir.
+Bu proje özel bir projedir. Ticari kullanım için izin gereklidir.
+
+## 👥 Katkıda Bulunanlar
+
+- **Hatice Akgül** - Proje Sahibi & Geliştirici
+
+## 📞 İletişim
+
+Sorularınız veya önerileriniz için:
+- Email: haticeakgul.dev@gmail.com
+
 
 ---
 
-**Test Durumu**: ✅ 206/206 passing  
-**CI/CD**: ✅ Aktif  
-**Son Güncelleme**: 2026-05-07
+**Not**: Bu projeyi çalıştırmadan önce tüm API anahtarlarını ve yapılandırma değişkenlerini güncel tuttuğunuzdan emin olun. Eksik yapılandırma, uygulamanın çalışmamasına neden olabilir.
+
+🌿 **Uğrak ile her köşe başı bir keşif!**
