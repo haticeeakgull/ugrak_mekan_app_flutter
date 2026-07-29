@@ -4,6 +4,7 @@
 
 ## 📱 Projenin Amacı
 
+
 Uğrak, geleneksel arama yöntemlerinin ötesine geçerek, kullanıcıların "sakin ve kitap okumaya uygun" veya "laptop ile çalışılabilir" gibi doğal ifadelerle arama yapmasını sağlar. BERT ve SBERT modelleri kullanarak, yalnızca kafe isimlerine değil, kullanıcı yorumlarına ve post içeriklerine de semantik anlam analizi uygular.
 
 ### Temel Özellikler
