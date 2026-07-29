@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import '../services/supabase_service.dart';
 import '../models/cafe_model.dart';
 import '../widgets/cafe_card.dart';
+import '../utils/error_handler.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -57,32 +58,48 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleDeepLink(Uri uri) async {
-    if (uri.queryParameters.containsKey('koleksiyonId')) {
-      final String? collectionId = uri.queryParameters['koleksiyonId'];
-      if (collectionId != null && mounted) {
-        // Koleksiyon sahibini öğrenmek için koleksiyonu çek
-        try {
-          final collection = await supabase
-              .from('koleksiyonlar')
-              .select('user_id, isim')
-              .eq('id', collectionId)
-              .maybeSingle();
+    debugPrint('🔗 Gelen Deep Link: $uri');
 
-          if (mounted && collection != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CollectionDetailScreen(
-                  collectionId: collectionId,
-                  collectionName: collection['isim'] ?? "Paylaşılan Koleksiyon",
-                  ownerId: collection['user_id']?.toString(),
-                ),
+    String? collectionId;
+
+    // 1. Durum: ID Path içinden geliyorsa (Örn: /ugrak-web/koleksiyon/XYZ123 veya /koleksiyon/XYZ123)
+    final segments = uri.pathSegments;
+    if (segments.contains('koleksiyon')) {
+      final index = segments.indexOf('koleksiyon');
+      if (index + 1 < segments.length) {
+        collectionId = segments[index + 1];
+      }
+    }
+
+    // 2. Durum: ID Query parametresinden geliyorsa (Örn: ?koleksiyonId=XYZ123)
+    if (collectionId == null &&
+        uri.queryParameters.containsKey('koleksiyonId')) {
+      collectionId = uri.queryParameters['koleksiyonId'];
+    }
+
+    // Eğer Koleksiyon ID bulunduysa ekranı aç
+    if (collectionId != null && collectionId.isNotEmpty && mounted) {
+      try {
+        final collection = await supabase
+            .from('koleksiyonlar')
+            .select('user_id, isim')
+            .eq('id', collectionId)
+            .maybeSingle();
+
+        if (mounted && collection != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CollectionDetailScreen(
+                collectionId: collectionId!,
+                collectionName: collection['isim'] ?? "Paylaşılan Koleksiyon",
+                ownerId: collection['user_id']?.toString(),
               ),
-            );
-          }
-        } catch (e) {
-          debugPrint('Koleksiyon bilgisi alınamadı: $e');
+            ),
+          );
         }
+      } catch (e) {
+        ErrorHandler.logError('Deep link koleksiyon yükleme', e);
       }
     }
   }
@@ -170,18 +187,17 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      final isTimeout = e.toString().contains('57014') ||
-          e.toString().contains('timeout') ||
-          e.toString().contains('TimeoutException');
+
+      // Kullanıcı dostu hata mesajı al
+      final errorConfig = ErrorHandler.getErrorSnackbarConfig(e);
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            isTimeout
-                ? 'Sunucu yavaş yanıt verdi, tekrar deneyin.'
-                : 'Arama başarısız oldu.',
-          ),
+          content: Text(errorConfig['message']),
           backgroundColor: deepGreen,
-          action: isTimeout
+          action: errorConfig['showRetry']
               ? SnackBarAction(
                   label: 'Tekrar Dene',
                   textColor: Colors.white,

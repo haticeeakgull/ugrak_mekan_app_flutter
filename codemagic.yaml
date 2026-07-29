@@ -1,4 +1,39 @@
 workflows:
+  android-workflow:
+    name: Uğrak Android Build
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      groups:
+        - env_vars # CodeMagic'te tanımlanacak environment variables grubu
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "main"
+          include: true
+    scripts:
+      - name: Create .env file
+        script: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL" > .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
+          echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY" >> .env
+          echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID" >> .env
+          echo "BERT_API_URL=$BERT_API_URL" >> .env
+          echo "SBERT_API_URL=$SBERT_API_URL" >> .env
+          echo "MY_SYNC_KEY=$MY_SYNC_KEY" >> .env
+          echo "ADMIN_EMAIL=$ADMIN_EMAIL" >> .env
+          echo "ONESIGNAL_APP_ID=$ONESIGNAL_APP_ID" >> .env
+      - name: Flutter pub get
+        script: |
+          flutter pub get
+      - name: Flutter build appbundle
+        script: |
+          flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+
   ios-workflow:
     name: Uğrak iOS Build
     max_build_duration: 60
@@ -6,10 +41,23 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
+      groups:
+        - env_vars
     triggering:
       events:
         - push
     scripts:
+      - name: Create .env file
+        script: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL" > .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
+          echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY" >> .env
+          echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID" >> .env
+          echo "BERT_API_URL=$BERT_API_URL" >> .env
+          echo "SBERT_API_URL=$SBERT_API_URL" >> .env
+          echo "MY_SYNC_KEY=$MY_SYNC_KEY" >> .env
+          echo "ADMIN_EMAIL=$ADMIN_EMAIL" >> .env
+          echo "ONESIGNAL_APP_ID=$ONESIGNAL_APP_ID" >> .env
       - name: Flutter pub get
         script: |
           flutter pub get

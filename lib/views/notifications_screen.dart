@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import '../utils/error_handler.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -32,7 +33,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .eq('receiver_id', myId)
           .eq('is_read', false);
     } catch (e) {
-      debugPrint("Okundu işaretleme hatası: $e");
+      ErrorHandler.logError('Bildirimleri okundu işaretle', e);
     }
   }
 
@@ -376,18 +377,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('✅ Bildirim silindi'),
+            content: const Text('Bildirim silindi'),
             backgroundColor: deepGreen,
             duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      debugPrint('❌ Bildirim silme hatası: $e');
+      ErrorHandler.logError('Bildirim silme', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Hata: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -431,18 +432,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(accept ? '✅ İstek kabul edildi' : '❌ İstek reddedildi'),
+            content: Text(accept ? 'İstek kabul edildi' : 'İstek reddedildi'),
             backgroundColor: accept ? Colors.green : Colors.red,
             duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      debugPrint("İşlem hatası: $e");
+      ErrorHandler.logError('Takip isteği işleme', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Hata: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -473,7 +474,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       debugPrint('✅ Takipçi puanı eklendi: +5 puan (Toplam: $newPoints)');
     } catch (e) {
-      debugPrint('❌ Takipçi puanı ekleme hatası: $e');
+      ErrorHandler.logError('Takipçi puanı ekleme', e);
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/missing_cafe_service.dart';
 import '../widgets/explore/map_location_picker.dart';
+import '../utils/error_handler.dart';
 
 /// Eksik Kafe Bildirimi - Tam Ekran Modern Form
 class ReportMissingCafeScreen extends StatefulWidget {
@@ -68,6 +69,7 @@ class _ReportMissingCafeScreenState extends State<ReportMissingCafeScreen> {
         _isLoadingLocation = false;
       });
     } catch (e) {
+      ErrorHandler.logError('Konum alma', e);
       setState(() => _isLoadingLocation = false);
     }
   }
@@ -98,7 +100,7 @@ class _ReportMissingCafeScreenState extends State<ReportMissingCafeScreen> {
     if (_userLocation != null) {
       setState(() => _selectedLocation = _userLocation);
     } else {
-      _showSnackBar('❌ Konum bilgisi alınamadı', isError: true);
+      _showSnackBar('Konum bilgisi alınamadı', isError: true);
     }
   }
 
@@ -106,7 +108,7 @@ class _ReportMissingCafeScreenState extends State<ReportMissingCafeScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedLocation == null) {
-      _showSnackBar('❌ Lütfen haritada konum seçin', isError: true);
+      _showSnackBar('Lütfen haritada konum seçin', isError: true);
       return;
     }
 
@@ -126,15 +128,16 @@ class _ReportMissingCafeScreenState extends State<ReportMissingCafeScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('✅ Bildiriminiz kaydedildi. Teşekkürler!'),
+            content: const Text('Bildiriminiz kaydedildi. Teşekkürler!'),
             backgroundColor: deepGreen,
             duration: const Duration(seconds: 3),
           ),
         );
       }
     } catch (e) {
+      ErrorHandler.logError('Eksik kafe bildirimi', e);
       setState(() => _isSubmitting = false);
-      _showSnackBar('❌ Hata: ${e.toString()}', isError: true);
+      _showSnackBar(ErrorHandler.getUserFriendlyMessage(e), isError: true);
     }
   }
 

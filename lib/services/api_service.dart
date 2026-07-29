@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cafe_model.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'embedding_service.dart';
+import '../utils/error_handler.dart';
 
 class ApiService {
   final _supabase = Supabase.instance.client;
@@ -132,7 +133,7 @@ class ApiService {
 
       return normalizedData.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
-      debugPrint("❌ Normal arama hatası: $e");
+      ErrorHandler.logError('Normal arama', e);
       if (e.toString().contains('invalid input syntax for type json')) {
         debugPrint("💡 Vibe etiketleri formatı hatalı. Array formatında gönderildiğinden emin ol.");
       }
@@ -266,7 +267,7 @@ class ApiService {
 
       return unique.map((item) => Cafe.fromJson(item)).toList();
     } catch (e) {
-      debugPrint("❌ AI Arama Hatası: $e");
+      ErrorHandler.logError('AI arama', e);
       if (e.toString().contains('does not exist') || e.toString().contains('operator')) {
         debugPrint("💡 SQL fonksiyonu güncellenmiş mi? Supabase'de kafe_ara_ai_dynamic fonksiyonunu kontrol et.");
       }
@@ -294,11 +295,11 @@ class ApiService {
       // 2. Embedding oluştur (arka planda, hata olsa bile devam et)
       final yorumId = yorumData['id'];
       _embeddingService.createYorumEmbedding(yorumId, comment).catchError((e) {
-        debugPrint("⚠️ Embedding oluşturulamadı ama yorum kaydedildi: $e");
+        ErrorHandler.logError('Yorum embedding', e);
       });
     } catch (e) {
-      debugPrint("Yorum ekleme hatası: $e");
-      throw Exception('Yorum gönderilemedi.');
+      ErrorHandler.logError('Yorum ekleme', e);
+      rethrow;
     }
   }
 
@@ -327,7 +328,7 @@ class ApiService {
       // Yorum için embedding oluştur (arka planda)
       final yorumId = yorumData['id'];
       _embeddingService.createYorumEmbedding(yorumId, icerik).catchError((e) {
-        debugPrint("⚠️ Yorum embedding oluşturulamadı: $e");
+        ErrorHandler.logError('Yorum embedding', e);
       });
 
       // 🔥 POST
@@ -344,11 +345,11 @@ class ApiService {
         // Post için embedding oluştur (arka planda)
         final postId = postData['id'];
         _embeddingService.createPostEmbedding(postId, icerik).catchError((e) {
-          debugPrint("⚠️ Post embedding oluşturulamadı: $e");
+          ErrorHandler.logError('Post embedding', e);
         });
       }
     } catch (e) {
-      debugPrint("Paylaşım Hatası: $e");
+      ErrorHandler.logError('Paylaşım', e);
       rethrow;
     }
   }

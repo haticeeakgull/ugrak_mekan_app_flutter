@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/error_handler.dart';
 
 class SupabaseService {
   final _client = Supabase.instance.client;
@@ -14,7 +15,7 @@ class SupabaseService {
       if (response.isEmpty) return _dummyIlceler;
       return (response as List).map((e) => e['ilce_adi'].toString()).toList();
     } catch (e) {
-      print("İlçe yükleme hatası: $e - Dummy data kullanılıyor");
+      ErrorHandler.logError('İlçe yükleme', e);
       return _dummyIlceler;
     }
   }
@@ -30,7 +31,7 @@ class SupabaseService {
       if (response.isEmpty) return _dummyVibes;
       return (response as List).map((e) => e['etiket_adi'].toString()).toList();
     } catch (e) {
-      print("Vibe yükleme hatası: $e - Dummy data kullanılıyor");
+      ErrorHandler.logError('Vibe yükleme', e);
       return _dummyVibes;
     }
   }
@@ -60,6 +61,7 @@ class SupabaseService {
         ..sort();
       return ilceler;
     } catch (e) {
+      ErrorHandler.logError('Şehre göre ilçe yükleme', e);
       return _ilcelerByIl[il] ?? [];
     }
   }
@@ -116,40 +118,43 @@ class SupabaseService {
     required String friendId,
     required String collectionId,
   }) async {
-    final myId = _client.auth.currentUser!.id;
+    try {
+      final myId = _client.auth.currentUser!.id;
 
-    // 1. Bu arkadaşla arandaki chat_id'yi bul (veya oluştur)
-    // Not: 'chats' tablonun yapısına göre burayı düzenlemelisin.
-    // Genelde iki kullanıcının ID'sini içeren odayı sorgularız.
-    final chatResponse = await _client
-        .from('chats')
-        .select('id')
-        .or(
-          'and(user1_id.eq.$myId,user2_id.eq.$friendId),and(user1_id.eq.$friendId,user2_id.eq.$myId)',
-        )
-        .maybeSingle();
-
-    String chatId;
-
-    if (chatResponse == null) {
-      // Sohbet yoksa yeni bir tane oluştur
-      final newChat = await _client
+      // 1. Bu arkadaşla arandaki chat_id'yi bul (veya oluştur)
+      final chatResponse = await _client
           .from('chats')
-          .insert({'user1_id': myId, 'user2_id': friendId})
-          .select()
-          .single();
-      chatId = newChat['id'];
-    } else {
-      chatId = chatResponse['id'];
-    }
+          .select('id')
+          .or(
+            'and(user1_id.eq.$myId,user2_id.eq.$friendId),and(user1_id.eq.$friendId,user2_id.eq.$myId)',
+          )
+          .maybeSingle();
 
-    // 2. Mesajı gönder
-    await _client.from('messages').insert({
-      'chat_id': chatId, // Senin sütun ismin
-      'sender_id': myId, // Senin sütun ismin
-      'collection_id': collectionId, // Senin sütun ismin
-      'content': 'Sana bir koleksiyon gönderdi!', // Senin sütun ismin
-      'created_at': DateTime.now().toIso8601String(),
-    });
+      String chatId;
+
+      if (chatResponse == null) {
+        // Sohbet yoksa yeni bir tane oluştur
+        final newChat = await _client
+            .from('chats')
+            .insert({'user1_id': myId, 'user2_id': friendId})
+            .select()
+            .single();
+        chatId = newChat['id'];
+      } else {
+        chatId = chatResponse['id'];
+      }
+
+      // 2. Mesajı gönder
+      await _client.from('messages').insert({
+        'chat_id': chatId,
+        'sender_id': myId,
+        'collection_id': collectionId,
+        'content': 'Sana bir koleksiyon gönderdi!',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      ErrorHandler.logError('Koleksiyon gönderme', e);
+      rethrow;
+    }
   }
 }

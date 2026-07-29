@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/supabase_service.dart';
+import '../utils/error_handler.dart';
 
 class ModernSearchExperience extends StatefulWidget {
   final List<String> vibeler;
@@ -82,12 +83,16 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     setState(() => isPanelOpen = false);
     widget.onPanelToggle?.call(false);
     
-    // Eğer "Konumum" seçiliyse otomatik arama yap
-    if (_isNearby && _userLat != null && _userLng != null) {
-      _triggerNearbySearch();
-      _showSnack('Yakınındaki kafeler gösteriliyor...');
+    // Mevcut arama metni var mı kontrol et
+    final String searchText = _searchController.text.trim();
+    
+    // Eğer arama metni varsa veya konum bazlı arama yapılıyorsa, direkt aramayı tetikle
+    if (searchText.isNotEmpty || _isNearby) {
+      _triggerSearch(useAI: searchText.isNotEmpty);
+      _showSnack('Filtreler uygulanarak arama yapılıyor...');
     } else {
-      _showSnack('Filtreler uygulandı. Arama yapmak için search bar\'ı kullanın.');
+      // Arama metni yoksa sadece filtreleri uygula
+      _showSnack('Filtreler uygulandı. Arama yapmak için metin girin.');
     }
   }
 
@@ -162,7 +167,8 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
       // Otomatik olarak yakındaki kafeleri göster
       _triggerNearbySearch();
     } catch (e) {
-      _showSnack('Konum alınamadı.');
+      ErrorHandler.logError('Konum alma', e);
+      _showSnack(ErrorHandler.getUserFriendlyMessage(e));
       setState(() => _isLoadingLocation = false);
     }
   }

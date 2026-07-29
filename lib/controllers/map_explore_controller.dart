@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/explore_service.dart';
+import '../utils/error_handler.dart';
 
 class MapExploreController extends ChangeNotifier {
   final ExploreService _service = ExploreService();
@@ -57,7 +58,7 @@ class MapExploreController extends ChangeNotifier {
       // Keşfet postlarını arka planda yükle (UI'ı bloklamaz)
       loadGlobalDiscovery();
     } catch (e) {
-      debugPrint("Başlatma hatası: $e");
+      ErrorHandler.logError('Konum ve kafe başlatma', e);
       isMapLoading = false;
       updateMarkers();
       loadGlobalDiscovery();
@@ -124,7 +125,7 @@ class MapExploreController extends ChangeNotifier {
       isFetching = false;
       notifyListeners();
     } catch (e) {
-      debugPrint("loadGlobalDiscovery hatası: $e");
+      ErrorHandler.logError('Keşfet postları yükleme', e);
       if (!loadMore) globalDiscoveryPosts = [];
       isFetching = false;
       notifyListeners();

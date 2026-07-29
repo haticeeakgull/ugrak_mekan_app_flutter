@@ -8,6 +8,7 @@ import 'package:ugrak_mekan_app/views/post_detail_screen.dart';
 import 'package:ugrak_mekan_app/views/onboarding_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import '../services/collection_service.dart';
+import '../utils/error_handler.dart';
 import '../services/follow_service.dart';
 import '../services/admin_service.dart';
 import '../services/badge_service.dart';
@@ -65,7 +66,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final userId = widget.targetUserId ?? _supabase.auth.currentUser?.id;
     if (userId != null) {
       BadgeService().checkBadgeProgress(userId).catchError((e) {
-        debugPrint("⚠️ Rozet kontrolü hatası: $e");
+        ErrorHandler.logError('Rozet kontrolü', e);
       });
     }
   }

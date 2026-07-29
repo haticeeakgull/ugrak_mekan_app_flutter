@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../utils/error_handler.dart';
 
 class ExploreService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -24,7 +25,7 @@ class ExploreService {
           .select('id, kafe_adi, latitude, longitude, il_adi, ilce_adi');
       return res;
     } catch (e) {
-      print("fetchKafeler hatası: $e");
+      ErrorHandler.logError('Kafeler yükleme', e);
       return [];
     }
   }
@@ -49,7 +50,7 @@ class ExploreService {
           .single();
       return res;
     } catch (e) {
-      print("fetchKafeDetails hatası: $e");
+      ErrorHandler.logError('Kafe detayları yükleme', e);
       return null;
     }
   }
@@ -72,7 +73,7 @@ class ExploreService {
 
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
-      print("fetchDiscoveryPostsRaw hatası: $e");
+      ErrorHandler.logError('Keşfet postları yükleme', e);
       return [];
     }
   }
