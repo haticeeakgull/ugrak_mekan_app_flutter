@@ -4,6 +4,7 @@ import 'package:ugrak_mekan_app/views/explore_screen.dart';
 import 'package:ugrak_mekan_app/views/home_screen.dart';
 import 'package:ugrak_mekan_app/views/user_profile_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import 'package:ugrak_mekan_app/widgets/banner_ad_widget.dart';
 import '../widgets/badge_alert.dart';
 
 class MainScreen extends StatefulWidget {
@@ -87,7 +88,34 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: Column(
+        children: [
+          // Ana sayfa içeriği
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
+          ),
+          
+          // Banner reklam - Bottom navigation'ın hemen üstünde
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(
+                  color: Colors.grey.shade200,
+                  width: 1,
+                ),
+              ),
+            ),
+            child: const SafeArea(
+              top: false,
+              child: BannerAdWidget(),
+            ),
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {

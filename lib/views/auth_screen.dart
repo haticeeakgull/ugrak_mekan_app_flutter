@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -32,16 +34,25 @@ class _AuthScreenState extends State<AuthScreen> {
         throw 'GOOGLE_WEB_CLIENT_ID .env dosyasında tanımlanmamış!';
       }
 
+      debugPrint('🔐 Google Sign-In başlatılıyor...');
+      debugPrint('📱 Web Client ID: ${webClientId.substring(0, 20)}...');
+
       final GoogleSignIn googleSignIn = GoogleSignIn(
         serverClientId: webClientId,
       );
+      
+      debugPrint('👤 Google hesap seçimi açılıyor...');
       final googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
+        debugPrint('❌ Kullanıcı Google girişini iptal etti');
         setState(() => _isLoading = false);
         return; // Kullanıcı seçim yapmadan pencereyi kapattı
       }
 
+      debugPrint('✅ Google hesabı seçildi: ${googleUser.email}');
+      debugPrint('🔑 Google authentication bilgileri alınıyor...');
+      
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
       final idToken = googleAuth.idToken;
@@ -50,6 +61,8 @@ class _AuthScreenState extends State<AuthScreen> {
         throw 'Google ID Token bulunamadı.';
       }
 
+      debugPrint('📤 Supabase\'e gönderiliyor...');
+      
       // Supabase'e Google kimlik bilgilerini gönderiyoruz
       await supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
@@ -57,16 +70,59 @@ class _AuthScreenState extends State<AuthScreen> {
         accessToken: accessToken,
       );
 
+      debugPrint('🎉 Google ile giriş başarılı!');
+      
       // Giriş başarılı!
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Google ile giriş başarılı!')),
+          const SnackBar(
+            content: Text('Google ile giriş başarılı!'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
-    } catch (e) {
+    } on PlatformException catch (e) {
+      debugPrint('❌ Platform Exception: ${e.code} - ${e.message}');
+      
+      String userMessage = 'Google ile giriş başarısız oldu.';
+      
+      // Hata koduna göre kullanıcı dostu mesajlar
+      if (e.code == 'sign_in_failed') {
+        if (e.message?.contains('10') == true) {
+          userMessage = 'Google OAuth yapılandırması eksik!\n\n'
+              'Lütfen geliştiriciyle iletişime geçin.\n'
+              '(Hata: SHA-1 fingerprint eklenmelı)';
+        } else if (e.message?.contains('12501') == true) {
+          userMessage = 'Giriş iptal edildi';
+          setState(() => _isLoading = false);
+          return; // Snackbar gösterme
+        } else {
+          userMessage = 'Google ile giriş başarısız: ${e.message}';
+        }
+      } else if (e.code == 'network_error') {
+        userMessage = 'İnternet bağlantısını kontrol edin';
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(userMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Bilinmeyen hata: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {

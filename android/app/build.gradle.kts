@@ -60,6 +60,12 @@ android {
             // 4. ARTIK DEBUG DEĞİL, GERÇEK MAĞAZA İMZASINI KULLANIYORUZ (GÜNCELLENDİ ✅)
             signingConfig = signingConfigs.getByName("release") 
             
+            // ProGuard rules for AdMob (minify kapalı olsa da eklenebilir)
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            
             isMinifyEnabled = false
             isShrinkResources = false
         }

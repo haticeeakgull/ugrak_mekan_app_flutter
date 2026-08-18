@@ -47,23 +47,85 @@ class SupabaseService {
   Future<List<String>> fetchIlcelerByIl(String il) async {
     try {
       final response = await _client
-          .from('kafeler')
-          .select('ilce')
-          .eq('il', il)
-          .not('ilce', 'is', null)
+          .from('ilce_isimli_kafeler')
+          .select('ilce_adi')
+          .eq('il_adi', il)
+          .not('ilce_adi', 'is', null)
           .timeout(const Duration(seconds: 5));
 
       if (response.isEmpty) return _ilcelerByIl[il] ?? [];
+      
+      // Geçersiz değerleri filtrele ve temizle
       final ilceler = (response as List)
-          .map((e) => e['ilce'].toString())
+          .map((e) => e['ilce_adi'].toString().trim())
+          .where(_isValidLocation)
           .toSet()
           .toList()
         ..sort();
+      
       return ilceler;
     } catch (e) {
       ErrorHandler.logError('Şehre göre ilçe yükleme', e);
       return _ilcelerByIl[il] ?? [];
     }
+  }
+
+  // Database'den benzersiz şehir listesini çeker
+  Future<List<String>> fetchSehirler() async {
+    try {
+      final response = await _client
+          .from('ilce_isimli_kafeler')
+          .select('il_adi')
+          .timeout(const Duration(seconds: 5));
+
+      if (response.isEmpty) return ['İstanbul', 'Ankara', 'İzmir'];
+      
+      // Benzersiz şehirleri al, geçersiz değerleri filtrele ve alfabetik sırala
+      final sehirler = (response as List)
+          .map((e) => e['il_adi'].toString().trim())
+          .where(_isValidLocation)
+          .toSet()
+          .toList()
+        ..sort();
+      
+      return sehirler.isNotEmpty ? sehirler : ['İstanbul', 'Ankara', 'İzmir'];
+    } catch (e) {
+      ErrorHandler.logError('Şehir listesi yükleme', e);
+      // Hata durumunda varsayılan şehirler
+      return ['İstanbul', 'Ankara', 'İzmir'];
+    }
+  }
+
+  // Geçerli bir lokasyon değeri mi kontrol eder
+  static bool _isValidLocation(String value) {
+    if (value.isEmpty) return false;
+    
+    final lowerValue = value.toLowerCase();
+    
+    // Geçersiz değerleri filtrele
+    final invalidValues = [
+      'null',
+      'debug',
+      'test',
+      'unknown',
+      'undefined',
+      'n/a',
+      'none',
+      'boş',
+      'yok',
+      '-',
+      '.',
+    ];
+    
+    // Belirli geçersiz değerleri kontrol et
+    if (invalidValues.contains(lowerValue)) return false;
+    
+    // "debug" veya "test" içeren değerleri filtrele (debug_test_2 gibi)
+    if (lowerValue.contains('debug') || lowerValue.contains('test')) {
+      return false;
+    }
+    
+    return true;
   }
 
   // Fallback: şehre göre dummy ilçeler

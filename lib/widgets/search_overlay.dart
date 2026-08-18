@@ -27,7 +27,8 @@ class ModernSearchExperience extends StatefulWidget {
   State<ModernSearchExperience> createState() => _ModernSearchExperienceState();
 }
 
-class _ModernSearchExperienceState extends State<ModernSearchExperience> {
+class _ModernSearchExperienceState extends State<ModernSearchExperience>
+    with TickerProviderStateMixin {
   String? selectedCity;
   String? selectedDistrict;
   List<String> selectedVibes = [];
@@ -46,22 +47,82 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   List<String> _filteredIlceler = [];
   bool _isLoadingIlceler = false;
 
+  // Dinamik şehir listesi
+  List<String> _sehirler = [];
+  bool _isLoadingSehirler = false;
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final SupabaseService _supabaseService = SupabaseService();
+
+  // Animation Controllers
+  late AnimationController _steamController;
+  late AnimationController _bounceController;
+  late Animation<double> _steamOpacity;
+  late Animation<double> _bounceAnimation;
 
   final Color deepGreen = const Color(0xFF346739);
   final Color midGreen = const Color(0xFF79AE6F);
   final Color lightGreen = const Color(0xFF9FCB98);
   final Color vanilla = const Color(0xFFFAF8F3);
 
-  static const List<String> _sehirler = ['İstanbul', 'Ankara', 'İzmir'];
+  @override
+  void initState() {
+    super.initState();
+    _loadSehirler();
+    _initAnimations();
+  }
+
+  void _initAnimations() {
+    // Steam animation - duman için
+    _steamController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _steamOpacity = Tween<double>(begin: 0.3, end: 0.8).animate(
+      CurvedAnimation(parent: _steamController, curve: Curves.easeInOut),
+    );
+
+    // Bounce animation - location icon için
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _bounceAnimation = Tween<double>(begin: 0, end: -8).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _steamController.dispose();
+    _bounceController.dispose();
     super.dispose();
+  }
+
+  // Database'den şehir listesini yükle
+  Future<void> _loadSehirler() async {
+    setState(() => _isLoadingSehirler = true);
+    try {
+      final sehirler = await _supabaseService.fetchSehirler();
+      if (mounted) {
+        setState(() {
+          _sehirler = sehirler;
+          _isLoadingSehirler = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _sehirler = ['İstanbul', 'Ankara', 'İzmir']; // Fallback
+          _isLoadingSehirler = false;
+        });
+      }
+    }
   }
 
   void _triggerSearch({bool useAI = false}) {
@@ -118,7 +179,8 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
           _isLoadingIlceler = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      ErrorHandler.logError('İlçe yükleme', e);
       if (mounted) setState(() => _isLoadingIlceler = false);
     }
     // Arama yapma - sadece filtre seçimi
@@ -188,7 +250,8 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
 
   /// Koordinata en yakın desteklenen şehri döner
   String? _findNearestCity(double lat, double lng) {
-    const cities = {
+    // Türkiye'nin büyük şehirlerinin koordinatları
+    final cities = {
       'İstanbul': (41.0082, 28.9784),
       'Ankara': (39.9334, 32.8597),
       'İzmir': (38.4192, 27.1287),
@@ -199,6 +262,26 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
       'Gaziantep': (37.0662, 37.3833),
       'Mersin': (36.8000, 34.6333),
       'Kayseri': (38.7312, 35.4787),
+      'Diyarbakır': (37.9144, 40.2306),
+      'Eskişehir': (39.7767, 30.5206),
+      'Samsun': (41.2867, 36.3300),
+      'Denizli': (37.7765, 29.0864),
+      'Şanlıurfa': (37.1591, 38.7969),
+      'Trabzon': (41.0015, 39.7178),
+      'Malatya': (38.3554, 38.3095),
+      'Kahramanmaraş': (37.5858, 36.9371),
+      'Erzurum': (39.9000, 41.2700),
+      'Van': (38.4891, 43.4089),
+      'Elazığ': (38.6810, 39.2264),
+      'Kocaeli': (40.8533, 29.8815),
+      'Balıkesir': (39.6484, 27.8826),
+      'Sakarya': (40.7569, 30.4093),
+      'Manisa': (38.6191, 27.4289),
+      'Aydın': (37.8560, 27.8416),
+      'Tekirdağ': (40.9833, 27.5167),
+      'Muğla': (37.2153, 28.3636),
+      'Kütahya': (39.4242, 29.9833),
+      'Sivas': (39.7477, 37.0179),
     };
 
     String? nearest;
@@ -322,81 +405,170 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
         !subtitle.contains("tarif et");
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
         decoration: BoxDecoration(
-          color: isExpanded
-              ? Colors.white.withOpacity(0.55)
-              : Colors.white.withOpacity(0.25),
-          borderRadius: BorderRadius.circular(16),
+          gradient: isExpanded
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white,
+                    Colors.white.withOpacity(0.95),
+                    vanilla.withOpacity(0.8),
+                  ],
+                )
+              : LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.4),
+                    Colors.white.withOpacity(0.25),
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isExpanded
-                ? deepGreen.withOpacity(0.35)
-                : midGreen.withOpacity(0.2),
-            width: isExpanded ? 1.5 : 1,
+                ? deepGreen.withOpacity(0.4)
+                : midGreen.withOpacity(0.25),
+            width: isExpanded ? 2 : 1.5,
           ),
+          boxShadow: isExpanded
+              ? [
+                  BoxShadow(
+                    color: deepGreen.withOpacity(0.15),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 6),
+                  ),
+                  BoxShadow(
+                    color: lightGreen.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: deepGreen.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: Column(
           children: [
-            ListTile(
-              onTap: () =>
-                  setState(() => expandedIndex = isExpanded ? null : index),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 4,
-              ),
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: deepGreen.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: deepGreen, size: 24),
-              ),
-              title: Text(
-                title.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: deepGreen,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: hasSelection
-                        ? deepGreen
-                        : deepGreen.withOpacity(0.6),
-                    fontWeight:
-                        hasSelection ? FontWeight.w800 : FontWeight.w600,
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () =>
+                    setState(() => expandedIndex = isExpanded ? null : index),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
                   ),
-                ),
-              ),
-              trailing: AnimatedRotation(
-                turns: isExpanded ? 0.5 : 0,
-                duration: const Duration(milliseconds: 300),
-                child: Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: deepGreen,
-                  size: 28,
+                  child: Row(
+                    children: [
+                      // Icon with enhanced styling
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: isExpanded
+                                ? [deepGreen, midGreen]
+                                : [
+                                    deepGreen.withOpacity(0.15),
+                                    midGreen.withOpacity(0.1),
+                                  ],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: isExpanded
+                              ? [
+                                  BoxShadow(
+                                    color: deepGreen.withOpacity(0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Icon(
+                          icon,
+                          color: isExpanded ? Colors.white : deepGreen,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Text content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: deepGreen.withOpacity(0.7),
+                                letterSpacing: 1.8,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: hasSelection
+                                    ? deepGreen
+                                    : deepGreen.withOpacity(0.55),
+                                fontWeight: hasSelection
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Arrow icon with animation
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isExpanded
+                              ? deepGreen.withOpacity(0.1)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: AnimatedRotation(
+                          turns: isExpanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.easeInOutCubic,
+                          child: Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: deepGreen,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
             AnimatedCrossFade(
               firstChild: const SizedBox(width: double.infinity),
               secondChild: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 child: content,
               ),
               crossFadeState: isExpanded
                   ? CrossFadeState.showSecond
                   : CrossFadeState.showFirst,
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 350),
+              sizeCurve: Curves.easeInOutCubic,
             ),
           ],
         ),
@@ -408,68 +580,188 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     if (_isLoadingLocation) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: deepGreen,
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  deepGreen.withOpacity(0.1),
+                  midGreen.withOpacity(0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: deepGreen,
+                    valueColor: AlwaysStoppedAnimation<Color>(midGreen),
+                  ),
                 ),
+                const SizedBox(width: 12),
+                Text(
+                  'Konum alınıyor...',
+                  style: TextStyle(
+                    color: deepGreen,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_isLoadingSehirler) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  deepGreen.withOpacity(0.1),
+                  midGreen.withOpacity(0.05),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Konum alınıyor...',
-                style: TextStyle(color: deepGreen, fontSize: 13),
-              ),
-            ],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: deepGreen,
+                    valueColor: AlwaysStoppedAnimation<Color>(midGreen),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Şehirler yükleniyor...',
+                  style: TextStyle(
+                    color: deepGreen,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_sehirler.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          'Şehir listesi yüklenemedi.',
+          style: TextStyle(
+            color: deepGreen.withOpacity(0.5),
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
           ),
         ),
       );
     }
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: ['📍 Konumum', ..._sehirler].map((c) {
         final isNearbyChip = c == '📍 Konumum';
         final isSel = isNearbyChip ? _isNearby : selectedCity == c;
-        return ChoiceChip(
-          label: Text(
-            c,
-            style: TextStyle(
-              color: isSel ? Colors.white : deepGreen,
-              fontWeight: FontWeight.bold,
+        return Container(
+          decoration: BoxDecoration(
+            gradient: isSel
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [deepGreen, midGreen],
+                  )
+                : null,
+            color: isSel ? null : Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSel
+                  ? deepGreen.withOpacity(0.3)
+                  : deepGreen.withOpacity(0.2),
+              width: isSel ? 2 : 1.5,
             ),
+            boxShadow: isSel
+                ? [
+                    BoxShadow(
+                      color: deepGreen.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
           ),
-          selected: isSel,
-          onSelected: (v) {
-            if (!v) {
-              setState(() {
-                if (isNearbyChip) {
-                  _isNearby = false;
-                  _nearbyCity = null;
-                  _userLat = null;
-                  _userLng = null;
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                if (isSel) {
+                  setState(() {
+                    if (isNearbyChip) {
+                      _isNearby = false;
+                      _nearbyCity = null;
+                      _userLat = null;
+                      _userLng = null;
+                    } else {
+                      selectedCity = null;
+                      selectedDistrict = null;
+                      _filteredIlceler = [];
+                    }
+                  });
                 } else {
-                  selectedCity = null;
-                  selectedDistrict = null;
-                  _filteredIlceler = [];
+                  _onCitySelected(c);
                 }
-              });
-              // Arama yapma - sadece filtre kaldırma
-            } else {
-              _onCitySelected(c);
-            }
-          },
-          selectedColor: deepGreen,
-          backgroundColor: Colors.white.withOpacity(0.3),
-          side: BorderSide.none,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+              },
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isNearbyChip)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.my_location_rounded,
+                          size: 16,
+                          color: isSel ? Colors.white : deepGreen,
+                        ),
+                      ),
+                    Text(
+                      isNearbyChip ? 'Konumum' : c,
+                      style: TextStyle(
+                        color: isSel ? Colors.white : deepGreen,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       }).toList(),
@@ -480,42 +772,85 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
     if (_isLoadingIlceler) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: CircularProgressIndicator(strokeWidth: 2, color: deepGreen),
+          padding: const EdgeInsets.all(16),
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: deepGreen,
+            valueColor: AlwaysStoppedAnimation<Color>(midGreen),
+          ),
         ),
       );
     }
 
     if (_filteredIlceler.isEmpty) {
-      return Text(
-        'Bu şehir için ilçe bulunamadı.',
-        style: TextStyle(color: deepGreen.withOpacity(0.5), fontSize: 13),
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          'Bu şehir için ilçe bulunamadı.',
+          style: TextStyle(
+            color: deepGreen.withOpacity(0.5),
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       );
     }
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: _filteredIlceler.map((s) {
         bool isSel = selectedDistrict == s;
-        return ActionChip(
-          label: Text(
-            s,
-            style: TextStyle(
-              color: isSel ? Colors.white : deepGreen,
-              fontSize: 13,
+        return Container(
+          decoration: BoxDecoration(
+            gradient: isSel
+                ? LinearGradient(
+                    colors: [midGreen, lightGreen],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isSel ? null : Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSel
+                  ? midGreen.withOpacity(0.4)
+                  : deepGreen.withOpacity(0.2),
+              width: isSel ? 2 : 1.5,
             ),
+            boxShadow: isSel
+                ? [
+                    BoxShadow(
+                      color: midGreen.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
           ),
-          onPressed: () {
-            setState(() => selectedDistrict = isSel ? null : s);
-            // Arama yapma - sadece filtre seçimi
-          },
-          backgroundColor: isSel ? midGreen : Colors.white.withOpacity(0.3),
-          side: BorderSide(
-            color: isSel ? deepGreen.withOpacity(0.2) : Colors.transparent,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                setState(() => selectedDistrict = isSel ? null : s);
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                child: Text(
+                  s,
+                  style: TextStyle(
+                    color: isSel ? Colors.white : deepGreen,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+            ),
           ),
         );
       }).toList(),
@@ -524,30 +859,87 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
 
   Widget _buildVibeChips() {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: widget.vibeler.map((v) {
         bool isSel = selectedVibes.contains(v);
-        return FilterChip(
-          label: Text(
-            v,
-            style: TextStyle(
-              color: isSel ? Colors.white : deepGreen,
-              fontSize: 12,
+        return Container(
+          decoration: BoxDecoration(
+            gradient: isSel
+                ? LinearGradient(
+                    colors: [
+                      midGreen,
+                      lightGreen,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.5),
+                      Colors.white.withOpacity(0.3),
+                    ],
+                  ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSel
+                  ? midGreen.withOpacity(0.4)
+                  : deepGreen.withOpacity(0.2),
+              width: isSel ? 2 : 1.5,
             ),
+            boxShadow: isSel
+                ? [
+                    BoxShadow(
+                      color: midGreen.withOpacity(0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
           ),
-          selected: isSel,
-          onSelected: (val) {
-            setState(
-              () => val ? selectedVibes.add(v) : selectedVibes.remove(v),
-            );
-            // Arama yapma - sadece filtre seçimi
-          },
-          selectedColor: midGreen,
-          backgroundColor: Colors.white.withOpacity(0.2),
-          checkmarkColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  if (isSel) {
+                    selectedVibes.remove(v);
+                  } else {
+                    selectedVibes.add(v);
+                  }
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isSel)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    Text(
+                      v,
+                      style: TextStyle(
+                        color: isSel ? Colors.white : deepGreen,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       }).toList(),
@@ -556,46 +948,143 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
 
   Widget _buildActionRow() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                selectedCity = null;
-                selectedDistrict = null;
-                selectedVibes.clear();
-                expandedIndex = null;
-                _isNearby = false;
-                _nearbyCity = null;
-                _userLat = null;
-                _userLng = null;
-                _filteredIlceler = [];
-              });
-              _showSnack('Filtreler sıfırlandı');
-            },
-            child: Text(
-              "Sıfırla",
-              style: TextStyle(
-                color: deepGreen.withOpacity(0.6),
-                fontWeight: FontWeight.bold,
+          // Reset Button - Enhanced
+          Expanded(
+            flex: 2,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.6),
+                    Colors.white.withOpacity(0.4),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: deepGreen.withOpacity(0.25),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: deepGreen.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      selectedCity = null;
+                      selectedDistrict = null;
+                      selectedVibes.clear();
+                      expandedIndex = null;
+                      _isNearby = false;
+                      _nearbyCity = null;
+                      _userLat = null;
+                      _userLng = null;
+                      _filteredIlceler = [];
+                    });
+                    _showSnack('Filtreler sıfırlandı');
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.refresh_rounded,
+                          color: deepGreen.withOpacity(0.7),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Sıfırla",
+                          style: TextStyle(
+                            color: deepGreen.withOpacity(0.7),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-          ElevatedButton(
-            onPressed: _applyFilters,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: deepGreen,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          const SizedBox(width: 12),
+          // Apply Button - Enhanced
+          Expanded(
+            flex: 3,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    deepGreen,
+                    midGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: deepGreen.withOpacity(0.4),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: midGreen.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              elevation: 0,
-            ),
-            child: const Text(
-              "Uygula",
-              style: TextStyle(fontWeight: FontWeight.bold),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _applyFilters,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          "Uygula",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -608,98 +1097,119 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              deepGreen.withOpacity(0.85),
-              midGreen.withOpacity(0.75),
+              deepGreen,
+              midGreen,
+              lightGreen,
             ],
+            stops: const [0.0, 0.5, 1.0],
           ),
           boxShadow: [
             BoxShadow(
-              color: deepGreen.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: deepGreen.withOpacity(0.4),
+              blurRadius: 24,
+              spreadRadius: 1,
+              offset: const Offset(0, 10),
             ),
             BoxShadow(
-              color: midGreen.withOpacity(0.2),
-              blurRadius: 10,
+              color: midGreen.withOpacity(0.3),
+              blurRadius: 16,
+              spreadRadius: -2,
               offset: const Offset(-4, -4),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    deepGreen.withOpacity(0.9),
-                    midGreen.withOpacity(0.8),
+                    deepGreen.withOpacity(0.95),
+                    midGreen.withOpacity(0.85),
+                    lightGreen.withOpacity(0.75),
                   ],
+                  stops: const [0.0, 0.6, 1.0],
                 ),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1.5,
+                  color: Colors.white.withOpacity(0.4),
+                  width: 2,
                 ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.coffee_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                        // Coffee Icon
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 1.5,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Uğrak Mekan',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white,
-                                      letterSpacing: -0.5,
-                                      height: 1.1,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Bugün nereye gidiyoruz? ☕',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                ],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.coffee_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Uğrak Mekan',
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -0.8,
+                                  height: 1.1,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black26,
+                                      offset: Offset(0, 2),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Bugün nereye gidelim? ☕',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -708,7 +1218,11 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1.5,
+                        ),
                       ),
                       child: IconButton(
                         onPressed: widget.onLogout,
@@ -717,8 +1231,9 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                           color: Colors.white,
                           size: 20,
                         ),
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         constraints: const BoxConstraints(),
+                        tooltip: 'Çıkış Yap',
                       ),
                     ),
                 ],
@@ -733,84 +1248,160 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
   Widget _buildHeroSearchBar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: midGreen.withOpacity(0.3)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            vanilla,
+            Colors.white.withOpacity(0.95),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(
+          color: midGreen.withOpacity(0.35),
+          width: 2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: deepGreen.withOpacity(0.05),
+            color: deepGreen.withOpacity(0.12),
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: lightGreen.withOpacity(0.1),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            spreadRadius: -2,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, color: deepGreen, size: 24),
-          const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _searchController,
               focusNode: _searchFocusNode,
               style: TextStyle(
                 color: deepGreen,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 fontSize: 15,
+                letterSpacing: 0.2,
               ),
               decoration: InputDecoration(
                 hintText: 'Mekan ara veya tarif et...',
                 hintStyle: TextStyle(
-                  color: deepGreen.withOpacity(0.5),
-                  fontWeight: FontWeight.w500,
+                  color: deepGreen.withOpacity(0.45),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  letterSpacing: 0.1,
                 ),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                contentPadding: EdgeInsets.zero,
               ),
               onSubmitted: (value) {
-                // Enter tuşuna basıldığında normal arama
                 if (value.trim().isNotEmpty) {
                   _triggerSearch(useAI: false);
                 }
               },
             ),
           ),
-          const SizedBox(width: 8),
-          // AI Button
+          const SizedBox(width: 12),
+          // AI Button - Deep Green Style
           Container(
             decoration: BoxDecoration(
-              color: deepGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              onPressed: () {
-                // AI arama
-                if (_searchController.text.trim().isEmpty) {
-                  _showSnack('Lütfen bir arama metni girin');
-                  return;
-                }
-                _triggerSearch(useAI: true);
-              },
-              icon: Icon(
-                Icons.auto_awesome_rounded,
-                color: deepGreen,
-                size: 20,
+              gradient: LinearGradient(
+                colors: [
+                  deepGreen,
+                  deepGreen.withOpacity(0.85),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-              tooltip: 'AI ile ara',
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: deepGreen.withOpacity(0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (_searchController.text.trim().isEmpty) {
+                    _showSnack('Lütfen bir arama metni girin');
+                    return;
+                  }
+                  _triggerSearch(useAI: true);
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AI',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           // Filter toggle button
           Container(
             decoration: BoxDecoration(
-              color: isPanelOpen 
-                  ? deepGreen.withOpacity(0.15) 
-                  : deepGreen.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
+              gradient: isPanelOpen
+                  ? LinearGradient(
+                      colors: [deepGreen, midGreen],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : LinearGradient(
+                      colors: [
+                        lightGreen.withOpacity(0.3),
+                        midGreen.withOpacity(0.2),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isPanelOpen
+                    ? deepGreen.withOpacity(0.4)
+                    : midGreen.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: isPanelOpen
+                  ? [
+                      BoxShadow(
+                        color: deepGreen.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : [],
             ),
             child: IconButton(
               onPressed: () {
@@ -819,11 +1410,11 @@ class _ModernSearchExperienceState extends State<ModernSearchExperience> {
                 widget.onPanelToggle?.call(newState);
               },
               icon: Icon(
-                isPanelOpen ? Icons.close : Icons.tune_rounded,
-                color: deepGreen,
-                size: 20,
+                isPanelOpen ? Icons.close_rounded : Icons.tune_rounded,
+                color: isPanelOpen ? Colors.white : deepGreen,
+                size: 22,
               ),
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               constraints: const BoxConstraints(),
               tooltip: isPanelOpen ? 'Filtreleri kapat' : 'Filtreleri aç',
             ),

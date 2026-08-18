@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:ugrak_mekan_app/views/collection_detail_screen.dart';
 import 'package:ugrak_mekan_app/widgets/app_scaffold.dart';
 import 'package:ugrak_mekan_app/widgets/search_overlay.dart';
+import 'package:ugrak_mekan_app/widgets/native_ad_widget.dart';
 import '../services/api_service.dart';
 import '../services/supabase_service.dart';
 import '../models/cafe_model.dart';
@@ -17,7 +18,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   final SupabaseService _supabaseService = SupabaseService();
   final SupabaseClient supabase = Supabase.instance.client;
@@ -31,6 +32,14 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _vibeler = [];
 
   final GlobalKey _searchKey = GlobalKey();
+
+  // Animation Controllers
+  late AnimationController _steamController;
+  late AnimationController _cupRotateController;
+  late AnimationController _bounceController;
+  late Animation<double> _steamOpacity;
+  late Animation<double> _cupRotate;
+  late Animation<double> _bounceAnimation;
 
   // --- YENİ RENK PALETİ TANIMLARI ---
   final Color deepGreen = const Color(
@@ -46,9 +55,50 @@ class _HomeScreenState extends State<HomeScreen> {
     _initDeepLinks();
     _filtreleriYukle();
     _currentUserEmail = supabase.auth.currentUser?.email;
+    _initAnimations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkProfile();
     });
+  }
+
+  void _initAnimations() {
+    // Steam animation - duman için
+    _steamController = AnimationController(
+      duration: const Duration(milliseconds: 2500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _steamOpacity = Tween<double>(begin: 0.2, end: 1.0).animate(
+      CurvedAnimation(parent: _steamController, curve: Curves.easeInOut),
+    );
+
+    // Cup rotation - hafif dönme
+    _cupRotateController = AnimationController(
+      duration: const Duration(seconds: 4),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _cupRotate = Tween<double>(begin: -0.05, end: 0.05).animate(
+      CurvedAnimation(parent: _cupRotateController, curve: Curves.easeInOut),
+    );
+
+    // Bounce animation - location icon için
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _bounceAnimation = Tween<double>(begin: 0, end: -15).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _steamController.dispose();
+    _cupRotateController.dispose();
+    _bounceController.dispose();
+    super.dispose();
   }
 
   Future<void> _initDeepLinks() async {
@@ -262,57 +312,399 @@ class _HomeScreenState extends State<HomeScreen> {
                                 padding:
                                     const EdgeInsets.fromLTRB(16, 16, 16, 80),
                                 physics: const BouncingScrollPhysics(),
-                                itemCount: _results.length,
-                                itemBuilder: (context, index) =>
-                                    CafeCard(cafe: _results[index]),
+                                itemCount: _results.length + (_results.length ~/ 4),
+                                itemBuilder: (context, index) {
+                                  // Her 4. cafe kartından sonra native reklam göster
+                                  if (index != 0 && index % 5 == 0) {
+                                    return const Padding(
+                                      padding: EdgeInsets.zero,
+                                      child: NativeAdWidget(),
+                                    );
+                                  }
+                                  
+                                  // Reklam sayısını çıkararak gerçek cafe index'ini bul
+                                  final cafeIndex = index - (index ~/ 5);
+                                  if (cafeIndex >= _results.length) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  
+                                  return CafeCard(cafe: _results[cafeIndex]);
+                                },
                               ),
                   ),
                 ],
               ),
+            ),
+      );
+  
+  }
+
+  Widget _buildEmptyState() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 40),
+            // Animated Coffee Cup Hero - Clean Design
+            Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    deepGreen.withOpacity(0.12),
+                    midGreen.withOpacity(0.08),
+                    lightGreen.withOpacity(0.05),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: deepGreen.withOpacity(0.15),
+                    blurRadius: 40,
+                    spreadRadius: 10,
+                    offset: const Offset(0, 15),
+                  ),
+                ],
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  // Main Coffee Cup with rotation
+                  AnimatedBuilder(
+                    animation: _cupRotate,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _cupRotate.value,
+                        child: Icon(
+                          Icons.coffee_rounded,
+                          size: 90,
+                          color: deepGreen,
+                        ),
+                      );
+                    },
+                  ),
+                  // Steam effects - 3 animated wisps closer to cup
+                  Positioned(
+                    top: 35,
+                    left: 70,
+                    child: AnimatedBuilder(
+                      animation: _steamOpacity,
+                      builder: (context, child) {
+                        return Opacity(
+                          opacity: _steamOpacity.value * 0.6,
+                          child: Transform.translate(
+                            offset: Offset(
+                              (_steamOpacity.value - 0.5) * 6,
+                              -_steamOpacity.value * 25,
+                            ),
+                            child: Transform.scale(
+                              scale: 0.5 + _steamOpacity.value * 0.5,
+                              child: Container(
+                                width: 10,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      deepGreen.withOpacity(0.5),
+                                      deepGreen.withOpacity(0.0),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: 38,
+                    left: 85,
+                    child: AnimatedBuilder(
+                      animation: _steamOpacity,
+                      builder: (context, child) {
+                        return Opacity(
+                          opacity: (1 - _steamOpacity.value) * 0.7,
+                          child: Transform.translate(
+                            offset: Offset(
+                              -(_steamOpacity.value - 0.5) * 8,
+                              -(1 - _steamOpacity.value) * 30,
+                            ),
+                            child: Transform.scale(
+                              scale: 0.6 + (1 - _steamOpacity.value) * 0.4,
+                              child: Container(
+                                width: 12,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      midGreen.withOpacity(0.6),
+                                      midGreen.withOpacity(0.0),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: 32,
+                    left: 100,
+                    child: AnimatedBuilder(
+                      animation: _steamOpacity,
+                      builder: (context, child) {
+                        return Opacity(
+                          opacity: _steamOpacity.value * 0.5,
+                          child: Transform.translate(
+                            offset: Offset(
+                              (_steamOpacity.value - 0.5) * 5,
+                              -_steamOpacity.value * 22,
+                            ),
+                            child: Transform.scale(
+                              scale: 0.4 + _steamOpacity.value * 0.6,
+                              child: Container(
+                                width: 9,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      lightGreen.withOpacity(0.7),
+                                      lightGreen.withOpacity(0.0),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Bouncing Location Icon - Right side
+                  Positioned(
+                    right: 5,
+                    top: 65,
+                    child: AnimatedBuilder(
+                      animation: _bounceAnimation,
+                      builder: (context, child) {
+                        return Transform.translate(
+                          offset: Offset(0, _bounceAnimation.value),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [deepGreen, midGreen],
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: deepGreen.withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.location_on_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Bouncing Search Icon - Left side
+                  Positioned(
+                    left: 5,
+                    top: 65,
+                    child: AnimatedBuilder(
+                      animation: _bounceAnimation,
+                      builder: (context, child) {
+                        return Transform.translate(
+                          offset: Offset(0, -_bounceAnimation.value * 0.8),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [midGreen, lightGreen],
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: midGreen.withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.search_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+            // Title with gradient effect
+            ShaderMask(
+              shaderCallback: (bounds) => LinearGradient(
+                colors: [
+                  deepGreen,
+                  midGreen,
+                ],
+              ).createShader(bounds),
+              child: const Text(
+                'Keşfedilmeyi Bekleyen Yerler',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.8,
+                  height: 1.2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Subtitle
+            Text(
+              'Arama butonuna basarak sana en uygun mekanları keşfedebilirsin.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: deepGreen.withOpacity(0.7),
+                fontSize: 16,
+                height: 1.6,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 40),
+            // Feature Cards
+            _buildFeatureCard(
+              icon: Icons.search_rounded,
+              title: 'Akıllı Arama',
+              description: 'İstediğin mekanı hızlıca bul',
+              gradient: [deepGreen, midGreen],
+            ),
+            const SizedBox(height: 16),
+            _buildFeatureCard(
+              icon: Icons.auto_awesome_rounded,
+              title: 'AI Önerileri',
+              description: 'Yapay zeka ile kişiselleştirilmiş sonuçlar',
+              gradient: [midGreen, lightGreen],
+            ),
+            const SizedBox(height: 16),
+            _buildFeatureCard(
+              icon: Icons.filter_list_rounded,
+              title: 'Gelişmiş Filtreler',
+              description: 'Şehir, ilçe ve vibe seçenekleri',
+              gradient: [lightGreen, midGreen.withOpacity(0.7)],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String title,
+    required String description,
+    required List<Color> gradient,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            gradient[0].withOpacity(0.08),
+            gradient[1].withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: gradient[0].withOpacity(0.2),
+          width: 2,
+        ),
+      ),
+      child: Row(
         children: [
           Container(
-            width: 100,
-            height: 100,
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: vanilla.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(30),
+              gradient: LinearGradient(
+                colors: gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: gradient[0].withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Icon(
-              Icons.coffee_outlined, // Temaya uygun doğa ikonu
-              size: 50,
-              color: deepGreen,
+              icon,
+              color: Colors.white,
+              size: 28,
             ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Keşfedilmeyi Bekleyen Yerler',
-            style: TextStyle(
-              color: deepGreen,
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Arama butonuna basarak sana en uygun mekanları bulabilirsin.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: midGreen,
-                fontSize: 14,
-                height: 1.5,
-                fontWeight: FontWeight.w500,
-              ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: deepGreen,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: deepGreen.withOpacity(0.6),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

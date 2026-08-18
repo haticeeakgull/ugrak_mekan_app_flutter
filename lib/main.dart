@@ -11,6 +11,8 @@ import 'package:ugrak_mekan_app/views/main_screen.dart';
 import "package:ugrak_mekan_app/views/user_profile_screen.dart";
 import 'package:ugrak_mekan_app/views/chat_detail_screen.dart';
 import 'package:ugrak_mekan_app/views/notifications_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 // Global navigator key for deep linking
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -18,7 +20,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   // Flutter motorunun hazır olduğundan emin oluyoruz
   WidgetsFlutterBinding.ensureInitialized();
-
+  await MobileAds.instance.initialize();
   // .env dosyasını yüklüyoruz (Tüm API anahtarları burada olmalı)
   await dotenv.load(fileName: ".env");
 

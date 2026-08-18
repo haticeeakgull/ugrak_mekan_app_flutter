@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../views/post_detail_screen.dart';
 import '../../views/user_profile_screen.dart';
+import '../native_ad_post_widget.dart';
 
 class DiscoverySheetWidget extends StatefulWidget {
   final List<Map<String, dynamic>>? discoveryPosts;
@@ -19,6 +20,16 @@ class DiscoverySheetWidget extends StatefulWidget {
 }
 
 class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
+  
+  // Toplam item sayısını hesapla (postlar + reklamlar)
+  int _calculateTotalItemCount() {
+    if (widget.discoveryPosts == null || widget.discoveryPosts!.isEmpty) {
+      return 0;
+    }
+    // Her 4 postta 1 reklam = postlar + (postlar / 4)
+    return widget.discoveryPosts!.length + (widget.discoveryPosts!.length ~/ 4);
+  }
+  
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -118,7 +129,8 @@ class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          if (index == widget.discoveryPosts!.length) {
+                          // Loading indicator
+                          if (index == _calculateTotalItemCount()) {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(20),
@@ -128,13 +140,25 @@ class _DiscoverySheetWidgetState extends State<DiscoverySheetWidget> {
                               ),
                             );
                           }
+                          
+                          // Her 4. sırada (4, 9, 14, ...) native reklam göster
+                          if (index > 0 && (index + 1) % 5 == 0) {
+                            return const NativeAdPostWidget();
+                          }
+                          
+                          // Reklam sayısını çıkararak gerçek post index'ini bul
+                          final postIndex = index - (index ~/ 5);
+                          if (postIndex >= widget.discoveryPosts!.length) {
+                            return const SizedBox.shrink();
+                          }
+                          
                           return _buildPostItem(
                             context,
-                            widget.discoveryPosts![index],
-                            index,
+                            widget.discoveryPosts![postIndex],
+                            postIndex,
                           );
                         },
-                        childCount: widget.discoveryPosts!.length + (widget.isLoading ? 1 : 0),
+                        childCount: _calculateTotalItemCount() + (widget.isLoading ? 1 : 0),
                       ),
                     ),
                     const SliverPadding(
