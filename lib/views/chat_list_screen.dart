@@ -193,38 +193,42 @@ class _ChatListScreenState extends State<ChatListScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
+      useSafeArea: true,
+      builder: (context) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Sohbeti sil
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('Sohbeti Sil'),
-              subtitle: const Text('Sohbet sizin için silinir'),
-              onTap: () {
-                Navigator.pop(context);
-                _showDeleteChatConfirmation(chat);
-              },
-            ),
-            
-            const SizedBox(height: 10),
-          ],
+              const SizedBox(height: 20),
+              
+              // Sohbeti sil
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Sohbeti Sil'),
+                subtitle: const Text('Sohbet sizin için silinir'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showDeleteChatConfirmation(chat);
+                },
+              ),
+              
+              const SizedBox(height: 10),
+            ],
+          ),
         ),
       ),
     );
@@ -282,15 +286,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
   // Sohbeti kullanıcı için sil (soft delete)
   Future<void> _deleteChat(String chatId) async {
     try {
-      final result = await _supabase.rpc(
-        'delete_chat_for_user',
-        params: {
-          'p_chat_id': chatId,
-          'p_user_id': myId,
-        },
-      );
+      // Önce bu chat'e ait tüm mesajları sil
+      await _supabase
+          .from('messages')
+          .delete()
+          .eq('chat_id', chatId);
 
-      debugPrint('✅ Sohbet silme sonucu: $result');
+      // Sonra chat'i sil
+      await _supabase
+          .from('chats')
+          .delete()
+          .eq('id', chatId);
+
+      debugPrint('✅ Sohbet başarıyla silindi: $chatId');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
